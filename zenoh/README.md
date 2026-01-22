@@ -83,3 +83,4 @@ deactivate
 
 You should see messages being published from both the ESP32/FireBeetle and your computer.
 Here is an image:
+<img width="2560" height="1600" alt="image" src="https://github.com/user-attachments/assets/f52007e3-7214-4273-9919-3814f6f87a13" />
