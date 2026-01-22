@@ -73,6 +73,14 @@ If you prefer not to uninstall the package, disable the service and its udev rul
     sudo systemctl stop brltty-udev.service
     sudo systemctl mask brltty-udev.service
     ```
+    Then reload udev rules:
+    ```bash
+    sudo service udev restart
+
+    # or
+
+    sudo udevadm control --reload-rules
+    sudo udevadm trigger
 
 ### Verification
 To verify the fix, run dmesg -w and plug in the board. You should see the device being assigned to `/dev/ttyUSB*` without any disconnection messages from brltty.
