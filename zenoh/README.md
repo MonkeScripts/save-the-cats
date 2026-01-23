@@ -40,6 +40,11 @@ Set up [rust](https://doc.rust-lang.org/cargo/getting-started/installation.html)
 curl https://sh.rustup.rs -sSf | sh
 source $HOME/.cargo/env
 ```
+Clone the repository: https://github.com/eclipse-zenoh/zenoh-python
+```bash
+git clone https://github.com/eclipse-zenoh/zenoh-python
+```  
+In the cloned directory:
 
 Using a virtual environment is strongly recommended to avoid Python version conflicts and dependency issues.
 
