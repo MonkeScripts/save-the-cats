@@ -89,10 +89,13 @@ Set up a reverse ssh tunnel because the Ultra96 is behind the school's firewall.
     ```bash
     python3 examples/z_pub.py -e tcp/127.0.0.1:7448
     ```
+   Note: Please do not use `localhost`, it might be interpreted as ipv6 version instead
     You can check whether the port is open by running:
     ```bash
     sudo netstat -nlp | grep 7448
     ```
+    <img width="1101" height="107" alt="image" src="https://github.com/user-attachments/assets/b146dd6c-590b-4421-8a25-1f2be67b878d" />
+
 ### Local computer changes for Ultra96 connection
 In a tmux:
 1. Start the zenoh router on your computer, binding to port 7448:
