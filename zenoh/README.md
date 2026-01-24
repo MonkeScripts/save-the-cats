@@ -108,6 +108,10 @@ In a tmux:
     ```
     You should be then able to see messages being published from the Ultra96 board.
 
+### Setting up SoC VPN
+A small note to install the debian for **fortinet_vpn** only
+The other fortinet debians requires you to have an endpoint management system (which we do not)
+
 ## Testing the setup (Esp32 and local computer)
 1. Start the zenoh router on your computer:
     ```bash
