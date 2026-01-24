@@ -80,7 +80,7 @@ Set up a reverse ssh tunnel because the Ultra96 is behind the school's firewall.
 
     127.0.0.1:7448	Where the traffic should go once it reaches your local machine (localhost, port 7448).
 
-2. Once logged into the Ultra96, you should be in the dedicated python virtual environment: `pynq-venv`. This is because the script to activate the virtual environment is already configured in the `/etc/profile.d/pynq_venv.sh`. **Note that zenoh python package is already installed in this virtual environment. Setup is exactly the same as setting up zenoh on a linux computer**.
+2. Once logged into the Ultra96, you should be in the dedicated python virtual environment: `pynq-venv`. This is because the script to activate the virtual environment is already configured in the `/etc/profile.d/pynq_venv.sh`. **Note that zenoh python package is already installed in this virtual environment**.
  If not in the environment, activate it by running:
     ```bash
     source /usr/local/share/pynq-venv/bin/activate
