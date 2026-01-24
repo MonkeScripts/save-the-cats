@@ -62,12 +62,50 @@ Build and install in development mode:
 
 maturin develop --release
 ```
-When you're done, deactivate the virtual environment:
-```bash
+## Using the Ultra96 board
+### Setting up ssh keys
+Refer to this https://www.digitalocean.com/community/tutorials/how-to-configure-ssh-key-based-authentication-on-a-linux-server to setup ssh keys. This is useful if you do not want to type in the password every time when you ssh in.
 
-deactivate
-```
-## Testing the setup
+### Accessing the Ultra96 board
+Set up a reverse ssh tunnel because the Ultra96 is behind the school's firewall.
+1. On your local computer, run:
+    ```bash
+    ssh -R 7448:127.0.0.1:7448 xilinx@makerslab-fpga-22.ddns.comp.nus.edu.sg
+    ```
+    This maps port 7448 on the remote Ultra96 to port 7448 on your local computer.
+
+    **Explanation of the parameters**:
+
+    -R 7448: The port on the Remote Server that will be opened.
+
+    127.0.0.1:7448	Where the traffic should go once it reaches your local machine (localhost, port 7448).
+
+2. Once logged into the Ultra96, you should be in the dedicated python virtual environment: `pynq-venv`. This is because the script to activate the virtual environment is already configured in the `/etc/profile.d/pynq_venv.sh`. **Note that zenoh python package is already installed in this virtual environment. Setup is exactly the same as setting up zenoh on a linux computer**.
+ If not in the environment, activate it by running:
+    ```bash
+    source /usr/local/share/pynq-venv/bin/activate
+    ```
+3. In a tmux session, start an example publisher or subscriber to test the setup.
+    ```bash
+    python3 examples/z_pub.py -e tcp/127.0.0.1:7448
+    ```
+    You can check whether the port is open by running:
+    ```bash
+    sudo netstat -nlp | grep 7448
+    ```
+### Local computer changes for Ultra96 connection
+In a tmux:
+1. Start the zenoh router on your computer, binding to port 7448:
+    ```bash
+    zenohd -l tcp/[::]:7448
+    ```
+2. On your computer, activate the virtual environment and run the Zenoh subscriber example from the `examples/z_sub.py`, connecting to the Ultra96:
+    ```bash
+    (.venv) python3 examples/z_sub.py -e tcp/127.0.0.1:7448
+    ```
+    You should be then able to see messages being published from the Ultra96 board.
+
+## Testing the setup (Esp32 and local computer)
 1. Start the zenoh router on your computer:
     ```bash
     zenohd
