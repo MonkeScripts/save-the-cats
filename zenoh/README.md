@@ -40,9 +40,9 @@ Set up [rust](https://doc.rust-lang.org/cargo/getting-started/installation.html)
 curl https://sh.rustup.rs -sSf | sh
 source $HOME/.cargo/env
 ```
-Clone the repository: https://github.com/eclipse-zenoh/zenoh-python
+Clone our fork: https://github.com/MonkeScripts/zenoh-python
 ```bash
-git clone https://github.com/eclipse-zenoh/zenoh-python
+git clone https://github.com/MonkeScripts/zenoh-python
 ```  
 In the cloned directory:
 
@@ -96,7 +96,25 @@ Set up a reverse ssh tunnel because the Ultra96 is behind the school's firewall.
     ```
     <img width="1101" height="107" alt="image" src="https://github.com/user-attachments/assets/b146dd6c-590b-4421-8a25-1f2be67b878d" />
 
-### Local computer changes for Ultra96 connection
+## Using Config files
+We use config files to simplify the connection setup. Each device has a `ROUTER_CONFIG.json5` and a `SESSION_CONFIG.json5` file in the our Zenoh Python fork.
+To run the examples with config files, use the following commands:
+For Routers:
+```bash
+zenohd -c <path-to-zenoh-python>/configs/<device>/ROUTER_CONFIG.json5
+```
+For Publishers/Subscribers:
+```bash
+python3 examples/z_pub.py -c <path-to-zenoh-python>/configs/<device>/SESSION_CONFIG.json5
+```
+
+### Setting up SoC VPN
+A small note to install the debian for **fortinet_vpn** only
+The other fortinet debians requires you to have an endpoint management system (which we do not)
+
+## Tests
+
+### Testing Ultra96 connection
 In a tmux:
 1. Start the zenoh router on your computer, binding to port 7448:
     ```bash
@@ -108,9 +126,7 @@ In a tmux:
     ```
     You should be then able to see messages being published from the Ultra96 board.
 
-### Setting up SoC VPN
-A small note to install the debian for **fortinet_vpn** only
-The other fortinet debians requires you to have an endpoint management system (which we do not)
+
 
 ## Testing the setup (Esp32 and local computer)
 1. Start the zenoh router on your computer:
