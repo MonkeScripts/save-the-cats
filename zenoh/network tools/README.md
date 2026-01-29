@@ -46,6 +46,8 @@ nc -zv <IP_ADDRESS> <PORT>
 
 # Test TCP port connectivity with telnet
 telnet <IP_ADDRESS> <PORT>
+# or
+curl -v telnet://<IP_ADDRESS> <PORT>
 ```
 
 ## Zenoh-Specific Commands
@@ -225,3 +227,14 @@ nmcli device status
    - Check routes: `ip route show`
    - Add specific route to bypass VPN: `sudo ip route add <IP>/32 via <LOCAL_GATEWAY> dev <INTERFACE> metric 50`
    - Use SSH tunnel as alternative
+6. Add keepalive options to your SSH tunnel:
+
+bash# On your laptop, reconnect with these options
+```bash
+ssh -R 7448:localhost:7448 \
+    -o ServerAliveInterval=30 \
+    -o ServerAliveCountMax=3 \
+    -o TCPKeepAlive=yes \
+    -o ExitOnForwardFailure=yes \
+    xilinx@pynq-board
+```
