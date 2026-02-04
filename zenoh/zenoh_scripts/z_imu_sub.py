@@ -31,7 +31,7 @@ def main(conf: zenoh.Config, key: str):
             nonlocal count
             count += 1
             print(
-                f">> [Subscriber] Received {sample.kind} ('{sample.key_expr}': '{sample.payload.to_string()}, count: {count}')"
+                f">> [Subscriber] Received {sample.kind} at {sample.timestamp.to_string_rfc3339_lossy()} ('{sample.key_expr}': '{sample.payload.to_string()}, count: {count}')"
             )
             data = json.loads(sample.payload.to_string())
             print(f"Json output: {data} ")
