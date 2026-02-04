@@ -158,7 +158,7 @@ void setup() {
 }
 
 void loop() {
-    delay(1000);
+    delay(500);
     float ax = 0.1f, ay = 0.2f, az = 0.3f;
     float gx = 0.4f, gy = 0.5f, gz = 0.6f;
     char json_buf[4096];
