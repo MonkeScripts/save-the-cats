@@ -14,12 +14,12 @@
 import time
 
 import zenoh
+from zenoh.ext import HistoryConfig, Miss, RecoveryConfig, declare_advanced_subscriber
 
 
 def main(conf: zenoh.Config, key: str):
     # initiate logging
     zenoh.init_log_from_env_or("error")
-    print(f"Current Config: {conf}")
 
     print("Opening session...")
     with zenoh.open(conf) as session:
@@ -30,7 +30,19 @@ def main(conf: zenoh.Config, key: str):
                 f">> [Subscriber] Received {sample.kind} ('{sample.key_expr}': '{sample.payload.to_string()}')"
             )
 
-        session.declare_subscriber(key, listener)
+        advanced_sub = declare_advanced_subscriber(
+            session,
+            key,
+            listener,
+            history=HistoryConfig(detect_late_publishers=True),
+            recovery=RecoveryConfig(heartbeat=True),
+            subscriber_detection=True,
+        )
+
+        def miss_listener(miss: Miss):
+            print(f">> [Subscriber] Missed {miss.nb} samples from {miss.source} !!!")
+
+        advanced_sub.sample_miss_listener(miss_listener)
 
         print("Press CTRL-C to quit...")
         while True:
@@ -50,13 +62,15 @@ if __name__ == "__main__":
 
     import zenoh_scripts.common as common
 
-    parser = argparse.ArgumentParser(prog="z_sub", description="zenoh sub example")
+    parser = argparse.ArgumentParser(
+        prog="z_imu_sub", description="imu subscription from firebeetle"
+    )
     common.add_config_arguments(parser)
     parser.add_argument(
         "--key",
         "-k",
         dest="key",
-        default="demo/example/**",
+        default="esp/**",
         type=str,
         help="The key expression to subscribe to.",
     )
