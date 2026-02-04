@@ -1,0 +1,18 @@
+session_name: comms
+start_directory: /home/monkescripts/Documents/NUS/Y4S2/CG4002/captstone/zenoh-python
+
+suppress_history: false
+windows:
+  - window_name: local
+    layout: tiled
+    shell_command_before:
+      - source .venv/bin/activate
+    panes:
+      - zenohd -c configs/local_computer/ROUTER_CONFIG.json5
+      - python3 examples/z_pub.py -c configs/local_computer/SESSION_CONFIG.json5
+      - python3 examples/z_sub.py -c configs/local_computer/SESSION_CONFIG.json5
+      - echo "test4"
+  - window_name: ultra
+    layout: tiled
+    panes:
+      - ssh -R 7448:127.0.0.1:7448 xilinx@makerslab-fpga-22.ddns.comp.nus.edu.sg
