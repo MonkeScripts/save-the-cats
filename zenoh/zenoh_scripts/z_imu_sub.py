@@ -15,6 +15,7 @@ import time
 
 import zenoh
 from zenoh.ext import HistoryConfig, Miss, RecoveryConfig, declare_advanced_subscriber
+import json
 
 
 def main(conf: zenoh.Config, key: str):
@@ -24,11 +25,16 @@ def main(conf: zenoh.Config, key: str):
     print("Opening session...")
     with zenoh.open(conf) as session:
         print(f"Declaring Subscriber on '{key}'...")
+        count = 0
 
         def listener(sample: zenoh.Sample):
+            nonlocal count
+            count += 1
             print(
-                f">> [Subscriber] Received {sample.kind} ('{sample.key_expr}': '{sample.payload.to_string()}')"
+                f">> [Subscriber] Received {sample.kind} ('{sample.key_expr}': '{sample.payload.to_string()}, count: {count}')"
             )
+            data = json.loads(sample.payload.to_string())
+            print(f"Json output: {data} ")
 
         advanced_sub = declare_advanced_subscriber(
             session,

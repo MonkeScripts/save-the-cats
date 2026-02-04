@@ -28,7 +28,7 @@
 // #define MODE "peer"
 // #define LOCATOR "udp/224.0.0.225:7447#iface=en0"
 
-#define KEYEXPRPUB "demo/example/zenoh-pico-pub"
+#define KEYEXPRPUB "esp/imu1"
 #define KEYEXPRSUB "demo/example/**"
 #define VALUE "[ARDUINO]{ESP32} Publication from Zenoh-Pico!"
 
@@ -159,20 +159,36 @@ void setup() {
 
 void loop() {
     delay(1000);
-    char buf[256];
-    sprintf(buf, "[%4d] %s", idx++, VALUE);
+    float ax = 0.1f, ay = 0.2f, az = 0.3f;
+    float gx = 0.4f, gy = 0.5f, gz = 0.6f;
+    char json_buf[4096];
+    int len = snprintf(json_buf, sizeof(json_buf),
+                       "{\"ax\": %.2f, \"ay\": %.2f, \"az\": %.2f, \"gx\": %.2f, \"gy\": %.2f, \"gz\": %.2f}",
+                       ax, ay, az, gx, gy, gz);
+    Serial.println("length is " + String(len));
+
+    if (len < 0 || len >= sizeof(json_buf)) {
+        Serial.println("Error: length of payload exceeds allocated json_buf, length is " + String(len));
+        return;
+    }
 
     Serial.print("Writing Data ('");
     Serial.print(KEYEXPRPUB);
     Serial.print("': '");
-    Serial.print(buf);
+    Serial.print(json_buf);
     Serial.println("')");
 
-    // Create payload
     z_owned_bytes_t payload;
-    z_bytes_copy_from_str(&payload, buf);
+    z_bytes_copy_from_str(&payload, json_buf);
 
-    if (z_publisher_put(z_publisher_loan(&pub), z_bytes_move(&payload), NULL) < 0) {
+    z_owned_encoding_t encoding;
+    z_encoding_from_str(&encoding, "text/json");
+
+    z_publisher_put_options_t options;
+    z_publisher_put_options_default(&options);
+    options.encoding = z_encoding_move(&encoding);
+
+    if (z_publisher_put(z_publisher_loan(&pub), z_bytes_move(&payload), &options) < 0) {
         Serial.println("Error while publishing data");
     }
 }
