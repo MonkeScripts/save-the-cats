@@ -11,8 +11,4 @@ windows:
       - zenohd -c configs/local_computer/ROUTER_CONFIG.json5
       - python3 examples/z_pub.py -c configs/local_computer/SESSION_CONFIG.json5
       - python3 examples/z_sub.py -c configs/local_computer/SESSION_CONFIG.json5
-      - echo "test4"
-  - window_name: ultra
-    layout: tiled
-    panes:
-      - ssh -R 7448:127.0.0.1:7448 xilinx@makerslab-fpga-22.ddns.comp.nus.edu.sg
+      - zenoh-bridge-mqtt -c configs/local_computer/SESSION_CONFIG.json5 
