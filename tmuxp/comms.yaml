@@ -1,14 +1,14 @@
 session_name: comms
-start_directory: /home/monkescripts/Documents/NUS/Y4S2/CG4002/captstone/zenoh-python
+start_directory: /home/monkescripts/Documents/NUS/Y4S2/CG4002/captstone/
 
 suppress_history: false
 windows:
   - window_name: local
     layout: tiled
     shell_command_before:
-      - source .venv/bin/activate
+      - source zenoh-python/.venv/bin/activate
     panes:
-      - zenohd -c configs/local_computer/ROUTER_CONFIG.json5
-      - python3 examples/z_pub.py -c configs/local_computer/SESSION_CONFIG.json5
-      - python3 examples/z_sub.py -c configs/local_computer/SESSION_CONFIG.json5
-      - zenoh-bridge-mqtt -c configs/local_computer/SESSION_CONFIG.json5 
+      - zenohd -c zenoh/configs/local_computer/ROUTER_CONFIG.json5
+      - python3 zenoh/zenoh_scripts/z_pub.py -c zenoh/configs/local_computer/SESSION_CONFIG.json5
+      - python3 zenoh/zenoh_scripts/z_sub.py -c zenoh/configs/local_computer/SESSION_CONFIG.json5
+      - zenoh-bridge-mqtt -c zenoh/configs/local_computer/SESSION_CONFIG.json5 

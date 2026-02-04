@@ -62,6 +62,28 @@ Build and install in development mode:
 
 maturin develop --release
 ```
+### Using tmuxp
+We use tmuxp to manage multiple tmux sessions. Install it via:
+```bash
+sudo apt install tmuxp
+```
+To start a tmux session, use:
+```bash
+tmuxp load <path-to-this-repo>/tmuxp/comms.yaml
+```
+### Zenoh mqtt bridge installation
+Adapted from: https://github.com/eclipse-zenoh/zenoh-plugin-mqtt
+Since we already have the keyrings and sources list set up from the zenoh installation, we can directly install the zenoh-bridge-mqtt package:
+```bash
+sudo apt install zenoh-bridge-mqtt
+```
+
+### Using mqtt broker (mosquitto)
+To install mosquitto broker, download the deban package from https://mqtt-explorer.com/ and install it via:
+```bash
+sudo dpkg -i <deb-package-file>
+```
+
 ## Using the Ultra96 board
 ### Setting up ssh keys
 Refer to this https://www.digitalocean.com/community/tutorials/how-to-configure-ssh-key-based-authentication-on-a-linux-server to setup ssh keys. This is useful if you do not want to type in the password every time when you ssh in.
@@ -101,11 +123,11 @@ We use config files to simplify the connection setup. Each device has a `ROUTER_
 To run the examples with config files, use the following commands:
 For Routers:
 ```bash
-zenohd -c <path-to-zenoh-python>/configs/<device>/ROUTER_CONFIG.json5
+zenohd -c <path-to-this-repo>/zenoh/configs/<device>/ROUTER_CONFIG.json5
 ```
 For Publishers/Subscribers:
 ```bash
-python3 examples/z_pub.py -c <path-to-zenoh-python>/configs/<device>/SESSION_CONFIG.json5
+python3 zenoh_scripts/z_pub.py -c <path-to-this-repo>/zenoh/configs/<device>/SESSION_CONFIG.json5
 ```
 
 ### Setting up SoC VPN
