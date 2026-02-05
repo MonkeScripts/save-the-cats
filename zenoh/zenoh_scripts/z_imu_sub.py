@@ -21,6 +21,7 @@ import json
 def main(conf: zenoh.Config, key: str):
     # initiate logging
     zenoh.init_log_from_env_or("error")
+    print(f"Current Config: {conf}")
 
     print("Opening session...")
     with zenoh.open(conf) as session:

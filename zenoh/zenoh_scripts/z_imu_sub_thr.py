@@ -15,6 +15,7 @@ def format_bytes(size):
 
 def main(conf: zenoh.Config, key: str, measure_count: int):
     zenoh.init_log_from_env_or("error")
+    print(f"Current Config: {conf}")
 
     print("Opening session...")
     with zenoh.open(conf) as session:
@@ -41,9 +42,13 @@ def main(conf: zenoh.Config, key: str, measure_count: int):
             state["total_bytes"] += payload_size
             state["batch_count"] += 1
             state["batch_bytes"] += payload_size
-
+            timestamp_str = (
+                sample.timestamp.to_string_rfc3339_lossy()
+                if sample.timestamp
+                else "N/A"
+            )
             print(
-                f">> [Subscriber] Received {sample.kind} at {sample.timestamp.to_string_rfc3339_lossy()} ('{sample.key_expr}': '{sample.payload.to_string()}')"
+                f">> [Subscriber] Received {sample.kind} at {timestamp_str} ('{sample.key_expr}': '{sample.payload.to_string()}')"
             )
             data = json.loads(sample.payload.to_string())
             print(f"Json output: {data} ")
@@ -78,20 +83,19 @@ def main(conf: zenoh.Config, key: str, measure_count: int):
             print(f"!! Missed {miss.nb} samples from {miss.source}")
 
         advanced_sub.sample_miss_listener(miss_listener)
-
         try:
             while True:
-                time.sleep(0.5)
+                time.sleep(0.5)  # Print every 5 seconds
+                if state["global_start"]:
+                    total_elapsed = time.time() - state["global_start"]
+                    if total_elapsed > 0:
+                        avg_throughput = state["total_count"] / total_elapsed
+                        avg_bandwidth = state["total_bytes"] / total_elapsed
+                        print(f"\n--- Average (since start) ---")
+                        print(f"Avg Throughput: {avg_throughput:.2f} msgs/s")
+                        print(f"Avg Bandwidth:  {format_bytes(avg_bandwidth)}/s")
         except KeyboardInterrupt:
-            if state["global_start"]:
-                total_elapsed = time.time() - state["global_start"]
-                print(f"\n--- Final Global Average ---")
-                print(
-                    f"Avg Throughput: {state['total_count'] / total_elapsed:.2f} msgs/s"
-                )
-                print(
-                    f"Avg Bandwidth:  {format_bytes(state['total_bytes'] / total_elapsed)}/s"
-                )
+            print("\nShutdown initiated")
 
 
 # --- Command line argument parsing ---

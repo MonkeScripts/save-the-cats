@@ -94,9 +94,9 @@
     /// or different lists for router, peer and client (e.g. endpoints: { router: ["tcp/[::]:7447"], peer: ["tcp/[::]:0"] }).
     ///
     /// See https://docs.rs/zenoh/latest/zenoh/config/struct.EndPoint.html
-    // endpoints: { router: ["tcp/127.0.0.1:7448", "tcp/0.0.0.0:7447"], peer: ["tcp/[::]:7447"],  },
-    // endpoints: { router: ["tcp/127.0.0.1:7448", "tls/0.0.0.0:7447"], peer: ["tcp/[::]:7447"],  },
-    endpoints: { router: ["tls/0.0.0.0:7447"], peer: [],  },
+    endpoints: { router: ["tcp/127.0.0.1:7448", "tcp/0.0.0.0:7447"], peer: ["tcp/[::]:7447"],  },
+    // endpoints: { router: ["tcp/127.0.0.1:7448","tcp/0.0.0.0:7447", "tls/127.0.0.1:7447"], peer: [],  },
+    // endpoints: { router: ["tls/0.0.0.0:7447"], peer: [],  },
 
     /// Global listen configuration,
     /// Accepts a single value or different values for router, peer and client.
@@ -207,7 +207,7 @@
   timestamping: {
     /// Whether data messages should be timestamped if not already.
     /// Accepts a single boolean value or different values for router, peer and client.
-    enabled: { router: true, peer: false, client: false },
+    enabled: { router: true, peer: true, client: true },
     /// Whether data messages with timestamps in the future should be dropped or not.
     /// If set to false (default), messages with timestamps in the future are retimestamped.
     /// Timestamps are ignored if timestamping is disabled.
@@ -598,7 +598,7 @@
       /// example, to only enable "tls" and "quic": protocols: ["tls", "quic"],
       ///
       /// Configure the zenoh TX parameters of a link
-      protocols: ["tls"],
+      // protocols: ["tls"],
       tx: {
         /// The resolution in bits to be used for the message sequence numbers.
         /// When establishing a session with another Zenoh instance, the lowest value of the two instances will be used.
