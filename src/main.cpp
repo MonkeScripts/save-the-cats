@@ -30,25 +30,36 @@
 // #define LOCATOR "udp/224.0.0.225:7447#iface=en0"
 
 #define KEYEXPRPUB "esp/imu1"
-#define KEYEXPRSUB "/action/**"
+#define KEYEXPRSUB "computer/**"
 #define VALUE "[ARDUINO]{ESP32} Publication from Zenoh-Pico!"
 
 z_owned_session_t s;
 z_owned_publisher_t pub;
 z_owned_subscriber_t sub;
 static int idx = 0;
+static int action = 0;
 
 void data_handler(z_loaned_sample_t* sample, void* arg) {
     z_view_string_t keystr;
     z_keyexpr_as_view_string(z_sample_keyexpr(sample), &keystr);
     z_owned_string_t value;
     z_bytes_to_string(z_sample_payload(sample), &value);
+    JsonDocument doc;
+    DeserializationError error = deserializeJson(doc, z_string_data(z_string_loan(&value)));
+    if (error) {
+        Serial.print(F("deserializeJson() failed: "));
+        Serial.println(error.c_str());
+        z_string_drop(z_string_move(&value));
+        return;
+    }
+    action = doc["action"] | 0;
 
     Serial.print(" >> [Subscription listener] Received (");
     Serial.write(z_string_data(z_view_string_loan(&keystr)), z_string_len(z_view_string_loan(&keystr)));
     Serial.print(", ");
     Serial.write(z_string_data(z_string_loan(&value)), z_string_len(z_string_loan(&value)));
     Serial.println(")");
+    Serial.println("    Parsed action: " + String(action));
 
     z_string_drop(z_string_move(&value));
 }

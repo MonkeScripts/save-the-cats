@@ -32,18 +32,15 @@ def main(conf: zenoh.Config, key: str, history: int):
 
                 # Generate random dummy IMU data
                 data = {
-                    "ax": round(random.uniform(-1, 1), 2),
-                    "ay": round(random.uniform(-1, 1), 2),
-                    "az": round(random.uniform(9.0, 10.0), 2),
-                    "gx": round(random.uniform(-0.1, 0.1), 2),
-                    "gy": round(random.uniform(-0.1, 0.1), 2),
-                    "gz": round(random.uniform(-0.1, 0.1), 2),
+                    "action": round(random.uniform(-1, 1), 2),
                 }
 
                 payload_string = json.dumps(data)
                 pub.put(payload_string)
 
-                print(f"[Key Pressed: {key_event}] Published to {key} | Index: {idx}")
+                print(
+                    f"[Key Pressed: {key_event}] Published to {key}with {data} | Index: {idx}"
+                )
 
             except Exception as e:
                 print(f"Error publishing: {e}")
@@ -64,7 +61,7 @@ if __name__ == "__main__":
         prog="z_relay_pub", description="Zenoh manual keystroke publisher"
     )
     common.add_config_arguments(parser)
-    parser.add_argument("--key", "-k", dest="key", default="esp/imu1", type=str)
+    parser.add_argument("--key", "-k", dest="key", default="computer/action1", type=str)
     parser.add_argument("--history", dest="history", type=int, default=1)
 
     args = parser.parse_args()
