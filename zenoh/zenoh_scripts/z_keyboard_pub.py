@@ -32,7 +32,7 @@ def main(conf: zenoh.Config, key: str, history: int):
 
                 # Generate random dummy IMU data
                 data = {
-                    "action": round(random.uniform(-1, 1), 2),
+                    "action": round(random.uniform(0, 3), 2),
                 }
 
                 payload_string = json.dumps(data)

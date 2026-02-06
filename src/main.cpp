@@ -52,7 +52,7 @@ void data_handler(z_loaned_sample_t* sample, void* arg) {
         z_string_drop(z_string_move(&value));
         return;
     }
-    action = doc["action"] | 0;
+    action = doc["action"];
 
     Serial.print(" >> [Subscription listener] Received (");
     Serial.write(z_string_data(z_view_string_loan(&keystr)), z_string_len(z_view_string_loan(&keystr)));
@@ -179,6 +179,7 @@ void loop() {
     doc["gx"] = 0.4f;
     doc["gy"] = 0.5f;
     doc["gz"] = 0.6f;
+    doc["action"] = action;
     char json_buf[4096];
     serializeJson(doc, json_buf);
 
