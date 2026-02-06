@@ -13,23 +13,24 @@
 //
 
 #include <Arduino.h>
+#include <ArduinoJson.h>
 #include <WiFi.h>
 #include <zenoh-pico.h>
 
 #if Z_FEATURE_PUBLICATION == 1
 // WiFi-specific parameters
-#define SSID "ZMSY2025"
-#define PASS "27381625"
+#define SSID "Purple_Haze"
+#define PASS "password"
 
 // Client mode values (comment/uncomment as needed)
 #define MODE "client"
-#define LOCATOR "tcp/192.168.0.93:7447"  // If empty, it will scout
+#define LOCATOR "tcp/172.20.10.2:7447"  // If empty, it will scout
 // Peer mode values (comment/uncomment as needed)
 // #define MODE "peer"
 // #define LOCATOR "udp/224.0.0.225:7447#iface=en0"
 
 #define KEYEXPRPUB "esp/imu1"
-#define KEYEXPRSUB "demo/example/**"
+#define KEYEXPRSUB "/action/**"
 #define VALUE "[ARDUINO]{ESP32} Publication from Zenoh-Pico!"
 
 z_owned_session_t s;
@@ -88,7 +89,7 @@ void setup() {
     if (z_open(&s, z_config_move(&config), NULL) < 0) {
         Serial.println("Unable to open session!");
         while (1) {
-            Serial.println("Stuck and unable to open Zenoh Session!");
+            // Serial.println("Stuck and unable to open Zenoh Session!");
         }
     }
     Serial.println("OK");
@@ -120,7 +121,7 @@ void setup() {
         Serial.println("Unable to start read and lease tasks\n");
         z_session_drop(z_session_move(&s));
         while (1) {
-            Serial.println("Stuck and unable to start read and lease tasks\n");
+            // Serial.println("Stuck and unable to start read and lease tasks\n");
         }
     }
 
@@ -159,16 +160,27 @@ void setup() {
 
 void loop() {
     delay(500);
-    float ax = 0.1f, ay = 0.2f, az = 0.3f;
-    float gx = 0.4f, gy = 0.5f, gz = 0.6f;
+    // adapted from https://registry.platformio.org/libraries/bblanchon/ArduinoJson
+    JsonDocument doc;
+    doc["ax"] = 0.1f;
+    doc["ay"] = 0.2f;
+    doc["az"] = 0.3f;
+    doc["gx"] = 0.4f;
+    doc["gy"] = 0.5f;
+    doc["gz"] = 0.6f;
     char json_buf[4096];
-    int len = snprintf(json_buf, sizeof(json_buf),
-                       "{\"ax\": %.2f, \"ay\": %.2f, \"az\": %.2f, \"gx\": %.2f, \"gy\": %.2f, \"gz\": %.2f}",
-                       ax, ay, az, gx, gy, gz);
-    Serial.println("length is " + String(len));
+    serializeJson(doc, json_buf);
 
-    if (len < 0 || len >= sizeof(json_buf)) {
-        Serial.println("Error: length of payload exceeds allocated json_buf, length is " + String(len));
+    // float ax = 0.1f, ay = 0.2f, az = 0.3f;
+    // float gx = 0.4f, gy = 0.5f, gz = 0.6f;
+    // char json_buf[4096];
+    // int len = snprintf(json_buf, sizeof(json_buf),
+    //                    "{\"ax\": %.2f, \"ay\": %.2f, \"az\": %.2f, \"gx\": %.2f, \"gy\": %.2f, \"gz\": %.2f}",
+    //                    ax, ay, az, gx, gy, gz);
+    // Serial.println("length is " + String(len));
+
+    if (strlen(json_buf) >= sizeof(json_buf)) {
+        Serial.println("Error: length of payload exceeds allocated json_buf");
         return;
     }
 
