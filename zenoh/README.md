@@ -84,6 +84,24 @@ To install mosquitto broker, download the deban package from https://mqtt-explor
 sudo dpkg -i <deb-package-file>
 ```
 
+## Generating SSL/TLS certificates
+Adapted from: https://zenoh.io/docs/manual/tls/
+To enable secure communication using SSL/TLS, you need to generate the necessary certificates. We use minica to generate our certificates.
+First, install the [Go tools](https://golang.org/dl/) and set up your $GOPATH. Then, run:
+
+go install github.com/jsha/minica@latest
+
+Surprisingly, to run minica, you need to run it from the home directory as such:
+```bash
+~/go/bin/minica --domains ultra96
+```
+On first run, minica will generate a keypair and a root certificate in the current directory, and will reuse that same keypair and root certificate unless they are deleted.
+
+On each run, minica will generate a new keypair and sign an end-entity (leaf) certificate for that keypair. The certificate will contain a list of DNS names and/or IP addresses from the command line flags. The key and certificate are placed in a new directory whose name is chosen as the first domain name from the certificate, or the first IP address if no domain names are present. It will not overwrite existing keys or certificates.
+
+The certificate will have a validity of 2 years and 30 days.
+>These certificates would be included as part of the config files for the devices.
+
 ## Using the Ultra96 board
 ### Setting up ssh keys
 Refer to this https://www.digitalocean.com/community/tutorials/how-to-configure-ssh-key-based-authentication-on-a-linux-server to setup ssh keys. This is useful if you do not want to type in the password every time when you ssh in.
