@@ -94,9 +94,9 @@
     /// or different lists for router, peer and client (e.g. endpoints: { router: ["tcp/[::]:7447"], peer: ["tcp/[::]:0"] }).
     ///
     /// See https://docs.rs/zenoh/latest/zenoh/config/struct.EndPoint.html
-    endpoints: { router: ["tcp/127.0.0.1:7448", "tcp/0.0.0.0:7447"], peer: ["tcp/[::]:7447"],  },
-    // endpoints: { router: ["tcp/127.0.0.1:7448","tcp/0.0.0.0:7447", "tls/127.0.0.1:7447"], peer: [],  },
-    // endpoints: { router: ["tls/0.0.0.0:7447"], peer: [],  },
+    // endpoints: { router: ["tcp/127.0.0.1:7448", "tcp/0.0.0.0:7447"], peer: ["tcp/[::]:7447"],  },
+    // endpoints: { router: ["tcp/127.0.0.1:7448","tcp/0.0.0.0:7447", "tls/0.0.0.0:7447"], peer: [],  },
+    endpoints: { router: ["tls/192.168.0.93:7447"], peer: ["tcp/0.0.0.0:7449"],  },
 
     /// Global listen configuration,
     /// Accepts a single value or different values for router, peer and client.
@@ -697,7 +697,7 @@
         /// Path to the TLS listening side public certificate
         listen_certificate: "/home/monkescripts/Documents/NUS/Y4S2/CG4002/captstone/tls/127.0.0.1/cert.pem",
         ///  Enables mTLS (mutual authentication), client authentication
-        enable_mtls: true,
+        enable_mtls: false,
         /// Path to the TLS connecting side private key
         connect_private_key: "/home/monkescripts/Documents/NUS/Y4S2/CG4002/captstone/tls/127.0.0.1/key.pem",
         /// Path to the TLS connecting side certificate
@@ -710,7 +710,7 @@
         /// Whether or not to close links when remote certificates expires.
         /// If set to true, links that require certificates (tls/quic) will automatically disconnect when the time of expiration of the remote certificate chain is reached
         /// note that mTLS (client authentication) is required for a listener to disconnect a client on expiration
-        close_link_on_expiration: true,
+        close_link_on_expiration: false,
         /// Optional configuration for TCP system buffers sizes for TLS links
         ///
         /// Configure TCP read buffer size (bytes)

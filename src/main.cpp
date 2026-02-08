@@ -15,16 +15,16 @@
 #include <Arduino.h>
 #include <ArduinoJson.h>
 #include <WiFi.h>
+#include <time.h>
 #include <zenoh-pico.h>
 
-#if Z_FEATURE_PUBLICATION == 1
-// WiFi-specific parameters
-#define SSID "Purple_Haze"
-#define PASS "password"
+#include "secrets.h"
+
+#if Z_FEATURE_PUBLICATION == 1 and Z_FEATURE_LINK_TLS == 1
 
 // Client mode values (comment/uncomment as needed)
 #define MODE "client"
-#define LOCATOR "tcp/172.20.10.2:7447"  // If empty, it will scout
+#define LOCATOR "tls/192.168.0.93:7447"  // If empty, it will scout
 // Peer mode values (comment/uncomment as needed)
 // #define MODE "peer"
 // #define LOCATOR "udp/224.0.0.225:7447#iface=en0"
@@ -39,6 +39,32 @@ z_owned_subscriber_t sub;
 static int idx = 0;
 static int action = 0;
 
+void syncTime() {
+    // 1. Try multiple NTP servers
+    // pool.ntp.org is standard, but some networks prefer local ones
+    configTime(0, 0, "pool.ntp.org", "time.google.com", "time.windows.com");
+
+    Serial.println("Waiting for NTP time sync...");
+    time_t now = time(nullptr);
+    int retry = 0;
+
+    // 1704067200 is Jan 1, 2024. We wait until we pass this.
+    while (now < 1704067200 && retry < 20) {
+        delay(1000);
+        now = time(nullptr);
+        Serial.printf("Current Epoch: %ld (Waiting for 2024+)\n", (long)now);
+        retry++;
+    }
+
+    if (now < 1704067200) {
+        Serial.println("NTP Failed! TLS will likely fail. Check if port 123 is blocked.");
+    } else {
+        struct tm timeinfo;
+        gmtime_r(&now, &timeinfo);
+        Serial.print("Time synchronized: ");
+        Serial.println(asctime(&timeinfo));
+    }
+}
 void data_handler(z_loaned_sample_t* sample, void* arg) {
     z_view_string_t keystr;
     z_keyexpr_as_view_string(z_sample_keyexpr(sample), &keystr);
@@ -70,16 +96,22 @@ void setup() {
     while (!Serial) {
         delay(1000);
     }
+    Serial.println("Starting Zenoh-Pico Arduino ESP32 example...");
 
     // Set WiFi in STA mode and trigger attachment
-    Serial.print("Connecting to WiFi...");
+    Serial.print("Connecting to WiFi: ...");
     WiFi.mode(WIFI_STA);
-    WiFi.begin(SSID, PASS);
+    WiFi.begin(WIFI_SSID, WIFI_PASS);
+    Serial.println("SSID: " + String(WIFI_SSID));
+    Serial.printf("Password: %s\n", WIFI_PASS);
+    Serial.printf("ROOT CA %s\n", my_root_ca);
     while (WiFi.status() != WL_CONNECTED) {
+        Serial.println("Attempting to connect to WiFi...");
         delay(1000);
     }
     Serial.println(WiFi.localIP());
     Serial.println("OK");
+    // syncTime();
 
     // Initialize Zenoh Session and other parameters
     z_owned_config_t config;
@@ -88,8 +120,25 @@ void setup() {
     // Insert mode changes based on config key
     zp_config_insert(z_config_loan_mut(&config), Z_CONFIG_MODE_KEY, MODE);
     if (strcmp(LOCATOR, "") != 0) {
+        // If mode == client
         if (strcmp(MODE, "client") == 0) {
             zp_config_insert(z_config_loan_mut(&config), Z_CONFIG_CONNECT_KEY, LOCATOR);
+            if (zp_config_insert(z_config_loan_mut(&config), Z_CONFIG_TLS_ROOT_CA_CERTIFICATE_BASE64_KEY, my_root_ca) != Z_OK) {
+                Serial.println("Failed to set inline CA certificate");
+            } else {
+                Serial.println("Set inline CA certificate");
+            }
+            if (zp_config_insert(z_config_loan_mut(&config), Z_CONFIG_TLS_ENABLE_MTLS_KEY, "false") != Z_OK) {
+                fprintf(stderr, "Failed to Disable mTLS\n");
+            } else {
+                Serial.println("Disabled mTLS");
+            }
+            if (zp_config_insert(z_config_loan_mut(&config), Z_CONFIG_TLS_VERIFY_NAME_ON_CONNECT_KEY, "false") != Z_OK) {
+                fprintf(stderr, "Failed to Disable name verification\n");
+            } else {
+                Serial.println("Disabled name verification");
+            }
+
         } else {
             zp_config_insert(z_config_loan_mut(&config), Z_CONFIG_LISTEN_KEY, LOCATOR);
         }
@@ -182,14 +231,6 @@ void loop() {
     doc["action"] = action;
     char json_buf[4096];
     serializeJson(doc, json_buf);
-
-    // float ax = 0.1f, ay = 0.2f, az = 0.3f;
-    // float gx = 0.4f, gy = 0.5f, gz = 0.6f;
-    // char json_buf[4096];
-    // int len = snprintf(json_buf, sizeof(json_buf),
-    //                    "{\"ax\": %.2f, \"ay\": %.2f, \"az\": %.2f, \"gx\": %.2f, \"gy\": %.2f, \"gz\": %.2f}",
-    //                    ax, ay, az, gx, gy, gz);
-    // Serial.println("length is " + String(len));
 
     if (strlen(json_buf) >= sizeof(json_buf)) {
         Serial.println("Error: length of payload exceeds allocated json_buf");
