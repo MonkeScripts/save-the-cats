@@ -1,5 +1,6 @@
 import time
 import zenoh
+from zenoh import ZBytes
 from zenoh.ext import HistoryConfig, Miss, RecoveryConfig, declare_advanced_subscriber
 import threading
 from typing import List
@@ -38,10 +39,11 @@ def main(
         def republish_callback(sample: zenoh.Sample):
             try:
                 print(
-                    f">> [Subscriber] Received {sample.kind} at {sample.timestamp.to_string_rfc3339_lossy()} ('{sample.key_expr}': '{sample.payload.to_string()}, count: {count}')"
+                    f">> [Subscriber] Received {sample.kind} at {sample.timestamp.to_string_rfc3339_lossy()} ('{sample.key_expr}': '{sample.payload.to_string()}')"
                 )
                 msg = json.loads(sample.payload.to_string())
-                val = float(msg[-1])
+                print(msg)
+                val = msg['gz']
                 with buffer_lock:
                     data_buffer.append(val)
                 print(f"Received: {val}")
@@ -76,7 +78,9 @@ def main(
                         data = {
                             "action": avg_val,
                         }
-                        pub.put(data)
+                        payload_string = json.dumps(data)
+                        payload_bytes = ZBytes(payload_string)
+                        pub.put(payload_bytes)
                         count = len(data_buffer)
                         print(
                             f">> [Repub] To Visualizer: average action after({count} samples): {avg_val:.2f}"
