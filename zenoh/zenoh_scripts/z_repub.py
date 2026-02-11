@@ -51,7 +51,7 @@ def main(
                 )
 
         print(f"Declaring Subscriber on '{sub_key}'...")
-        sub = session.declare_advanced_subscriber(
+        sub = declare_advanced_subscriber(
             session,
             sub_key,
             republish_callback,
