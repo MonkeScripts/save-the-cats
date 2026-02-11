@@ -2,6 +2,7 @@ import time
 import zenoh
 import threading
 from typing import List
+import json
 
 
 def main(
@@ -35,8 +36,10 @@ def main(
 
         def republish_callback(sample: zenoh.Sample):
             try:
-                # Should give me gibberish values
-                msg = sample.payload.to_string()
+                print(
+                    f">> [Subscriber] Received {sample.kind} at {sample.timestamp.to_string_rfc3339_lossy()} ('{sample.key_expr}': '{sample.payload.to_string()}, count: {count}')"
+                )
+                msg = json.loads(sample.payload.to_string())
                 val = float(msg[-1])
                 with buffer_lock:
                     data_buffer.append(val)
@@ -47,7 +50,19 @@ def main(
                 )
 
         print(f"Declaring Subscriber on '{sub_key}'...")
-        sub = session.declare_subscriber(sub_key, republish_callback)
+        sub = session.declare_advanced_subscriber(
+            session,
+            sub_key,
+            republish_callback,
+            history=HistoryConfig(detect_late_publishers=True),
+            recovery=RecoveryConfig(heartbeat=True),
+            subscriber_detection=True,
+        )
+
+        def miss_listener(miss: Miss):
+            print(f">> [Subscriber] Missed {miss.nb} samples from {miss.source} !!!")
+
+        sub.sample_miss_listener(miss_listener)
 
         print(f"Averaging every {interval}s. Press CTRL-C to quit...")
         try:
