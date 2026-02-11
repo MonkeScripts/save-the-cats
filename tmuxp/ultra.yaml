@@ -1,0 +1,14 @@
+session_name: ultra
+start_directory: /home/xilinx/save-the-cats/
+
+
+suppress_history: false
+windows:
+  - window_name: local
+    layout: tiled
+    shell_command_before:
+      - source zenoh-python/.venv/bin/activate
+    panes:
+      - zenohd -c zenoh/configs/ultra96/ROUTER_CONFIG.json5
+      - python3 zenoh/zenoh_scripts/z_big_file_queryable.py -c zenoh/configs/ultra96/SESSION_CONFIG.json5
+      - python3 zenoh/zenoh_scripts/z_repub.py -c zenoh/configs/ultra96/SESSION_CONFIG.json5

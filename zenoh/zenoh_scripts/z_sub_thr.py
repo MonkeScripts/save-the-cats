@@ -108,7 +108,7 @@ if __name__ == "__main__":
 
     parser = argparse.ArgumentParser(prog="z_imu_sub_thr")
     common.add_config_arguments(parser)
-    parser.add_argument("--key", "-k", default="esp/**", type=str)
+    parser.add_argument("--key", "-k", default="**", type=str)
     parser.add_argument(
         "--number", "-n", default=100, type=int, help="Batch size for logs"
     )
