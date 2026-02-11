@@ -43,7 +43,7 @@ def main(
                 )
                 msg = json.loads(sample.payload.to_string())
                 print(msg)
-                val = msg['gz']
+                val = msg["avtion"]
                 with buffer_lock:
                     data_buffer.append(val)
                 print(f"Received: {val}")

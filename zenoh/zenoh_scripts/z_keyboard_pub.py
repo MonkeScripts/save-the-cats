@@ -1,13 +1,23 @@
+import sys
+import tty
+import termios
 import zenoh
 import json
 import random
 import itertools
-from zenoh import ZBytes
 from zenoh.ext import CacheConfig, MissDetectionConfig, declare_advanced_publisher
 
-# We use pynput to capture keystrokes without needing to press "Enter"
-# Install via: pip install pynput
-from pynput import keyboard
+
+def get_char():
+    """Reads a single character from the terminal without pressing Enter."""
+    fd = sys.stdin.fileno()
+    old_settings = termios.tcgetattr(fd)
+    try:
+        tty.setraw(sys.stdin.fileno())
+        ch = sys.stdin.read(1)
+    finally:
+        termios.tcsetattr(fd, termios.TCSADRAIN, old_settings)
+    return ch
 
 
 def main(conf: zenoh.Config, key: str, history: int):
@@ -16,6 +26,8 @@ def main(conf: zenoh.Config, key: str, history: int):
     print("Opening session...")
     with zenoh.open(conf) as session:
         print(f"Declaring AdvancedPublisher on '{key}'...")
+
+        # Configure the publisher
         pub = declare_advanced_publisher(
             session,
             key,
@@ -26,36 +38,40 @@ def main(conf: zenoh.Config, key: str, history: int):
 
         counter = itertools.count()
 
-        def on_press(key_event):
-            try:
+        print("\n--- Relay Active ---")
+        print("TAP ANY KEY to publish a dummy packet.")
+        print("Press 'q' or 'ESC' to exit.\n")
+
+        try:
+            while True:
+                char = get_char()
+
+                if char == "q" or char == "\x1b" or char == "\x03":
+                    print("\nExiting...")
+                    break
+
                 idx = next(counter)
 
-                # Generate random dummy IMU data
                 data = {
                     "action": round(random.uniform(0, 3)),
+                    "key_pressed": char,  # Debugging help
                 }
 
-                payload_string = json.dumps(data)
-                pub.put(payload_string)
+                payload = json.dumps(data).encode("utf-8")
+                pub.put(payload)
 
-                print(
-                    f"[Key Pressed: {key_event}] Published to {key}with {data} | Index: {idx}"
-                )
+                print(f"[{idx}] Sent Action {data['action']} (Key: '{char}')")
 
-            except Exception as e:
-                print(f"Error publishing: {e}")
-
-        print("\n--- Relay Active ---")
-        print("TAP ANY KEY to publish a dummy packet. Press ESC to exit.")
-
-        # Start the keyboard listener
-        with keyboard.Listener(on_press=on_press) as listener:
-            listener.join()
+        except KeyboardInterrupt:
+            print("\nStopped by user.")
 
 
 if __name__ == "__main__":
     import argparse
     import common
+
+    # Ensure standard libraries are available
+    import os
 
     parser = argparse.ArgumentParser(
         prog="z_relay_pub", description="Zenoh manual keystroke publisher"
