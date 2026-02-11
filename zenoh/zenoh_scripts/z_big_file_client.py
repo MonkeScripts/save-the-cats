@@ -71,8 +71,8 @@ def main(conf: zenoh.Config, selector: str, target: zenoh.QueryTarget, timeout: 
 
                 # Change the wallpaper
                 set_wallpaper(full_path)
-        else:
-            print(f"REPLY NOT OK")
+            else:
+                print(f"REPLY NOT OK")
 
 
 if __name__ == "__main__":
