@@ -9,6 +9,7 @@ windows:
       - source zenoh-python/.venv/bin/activate
     panes:
       - zenohd -c zenoh/configs/local_computer/ROUTER_CONFIG.json5
-      - python3 zenoh/zenoh_scripts/z_pub.py -c zenoh/configs/local_computer/SESSION_CONFIG.json5
-      - python3 zenoh/zenoh_scripts/z_sub.py -c zenoh/configs/local_computer/SESSION_CONFIG.json5
+      - python3 zenoh/zenoh_scripts/z_keyboard_pub.py -c zenoh/configs/local_computer/SESSION_CONFIG.json5
+      - python3 zenoh/zenoh_scripts/z_sub_thr.py -c zenoh/configs/local_computer/SESSION_CONFIG.json5
+      - python3 zenoh/zenoh_scripts/z_big_file_client.py -c zenoh/configs/local_computer/SESSION_CONFIG.json5
       - zenoh-bridge-mqtt -c zenoh/configs/local_computer/BRIDGE_CONFIG.json5 
