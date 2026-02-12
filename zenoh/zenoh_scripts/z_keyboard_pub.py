@@ -53,7 +53,7 @@ def main(conf: zenoh.Config, key: str, history: int):
                 idx = next(counter)
 
                 data = {
-                    "action": round(random.uniform(0, 3)),
+                    "action": round(random.uniform(0, 10)),
                     "key_pressed": char,  # Debugging help
                 }
 
