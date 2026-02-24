@@ -1,0 +1,158 @@
+////
+//// This file presents the default configuration used by both the `zenoh-plugin-mqtt` plugin and the `zenoh-bridge-mqtt` standalone executable.
+//// The "mqtt" JSON5 object below can be used as such in the "plugins" part of a config file for the zenoh router (zenohd).
+////
+{
+  plugins: {
+    ////
+    //// MQTT related configuration
+    //// All settings are optional and are unset by default - uncomment the ones you want to set
+    ////
+    mqtt: {
+      ////
+      //// port: The address to bind the MQTT server. Default: "0.0.0.0:1883". Accepted values:'
+      ////       - a port number ("0.0.0.0" will be used as IP to bind, meaning any interface of the host)
+      ////       - a string with format `<local_ip>:<port_number>` (to bind the MQTT server to a specific interface).
+      ////
+      port: "0.0.0.0:8883",
+
+      ////
+      //// scope: A string added as prefix to all routed MQTT topics when mapped to a zenoh resource.
+      ////        This should be used to avoid conflicts when several distinct MQTT systems using
+      ////        the same topics names are routed via zenoh.
+      ////
+      // scope: "home-1",
+
+      ////
+      //// allow: A regular expression matching the MQTT topic name that must be routed via zenoh. By default topics are allowed.
+      ////        If both '--allow' and '--deny' are set a topic will be allowed if it matches only the 'allow' expression.
+      ////
+      // allow: "zigbee2mqtt|home-1/room-2",
+
+      ////
+      //// deny:  A regular expression matching the MQTT topic name that must not be routed via zenoh. By default no topics are denied.
+      ////        If both '--allow' and '--deny' are set a topic will be allowed if it matches only the 'allow' expression.
+      ////
+      // deny: "zigbee2mqtt|home-1/room-2",
+
+      ////
+      //// generalise_subs: A list of key expression to use for generalising subscriptions.
+      ////
+      // generalise_subs: ["SUB1", "SUB2"],
+
+      ////
+      //// generalise_subs: A list of key expression to use for generalising publications.
+      ////
+      // generalise_subs: ["PUB1", "PUB2"],
+
+      ////
+      //// tx_channel_size: Size of the MQTT transmit channel (default: 65536).
+      ////                  The channel buffers messages from Zenoh until they can be sent to MQTT clients.
+      ////                  If the channel capacity is reached new messages from Zenoh will be dropped until space becomes available.
+      ////
+      // tx_channel_size: 65536,
+
+      ////
+      //// TLS related configuration (MQTTS active only if this part is defined).
+      ////
+      tls: {
+        ////
+        //// server_private_key: TLS private key provided as either a file or base 64 encoded string.
+        ////                     One of the values below must be provided.
+        ////
+        server_private_key: "/home/monkescripts/Documents/NUS/Y4S2/CG4002/captstone/tls/127.0.0.1/key.pem",
+        // server_private_key_base64: "base64-private-key",
+      
+        ////
+        //// server_certificate: TLS public certificate provided as either a file or base 64 encoded string.
+        ////                     One of the values below must be provided.
+        ////
+        server_certificate: "/home/monkescripts/Documents/NUS/Y4S2/CG4002/captstone/tls/127.0.0.1/cert.pem",
+        // server_certificate_base64: "base64-certificate",
+      
+        ////
+        //// root_ca_certificate: Certificate of the certificate authority used to validate clients connecting to the MQTT server.
+        ////                      Provided as either a file or base 64 encoded string.
+        ////                      This setting is optional and enables mutual TLS (mTLS) support if provided.
+        ////
+        // root_ca_certificate: "/path/to/root-ca-certificate.pem",
+        // root_ca_certificate_base64: "base64-root-ca-certificate",
+      },
+
+      ////
+      //// This plugin uses Tokio (https://tokio.rs/) for asynchronous programming. 
+      //// When running as a plugin within a Zenoh router, the plugin creates its own Runtime managing 2 pools of threads:
+      ////    - worker threads for non-blocking tasks. Those threads are spawn at Runtime creation.
+      ////    - blocking threads for blocking tasks (e.g. I/O). Those threads are spawn when needed.
+      //// For more details see https://github.com/tokio-rs/tokio/discussions/3858#discussioncomment-869878
+      //// When running as a standalone bridge the Zenoh Session's Runtime is used and can be configured via the
+      //// `ZENOH_RUNTIME` environment variable. See https://docs.rs/zenoh-runtime/latest/zenoh_runtime/enum.ZRuntime.html
+      ////
+      
+      //// work_thread_num: The number of worker thread in the asynchronous runtime will use. (default: 2)
+      ////                  Only for a plugin, no effect on a bridge.
+      // work_thread_num: 2,
+      
+      //// max_block_thread_num: The number of blocking thread in the asynchronous runtime will use. (default: 50)
+      ////                       Only for a plugin, no effect on a bridge.
+      // max_block_thread_num: 50,
+
+      ////
+      //// MQTT client authentication related configuration.
+      ////
+      // auth: {
+      //   ////
+      //   //// dictionary_file: Path to a file containing the MQTT client username/password dictionary.
+      //   ////
+      //   dictionary_file: "/path/to/dictionary-file",
+      // },
+
+    },
+
+    ////
+    //// REST API configuration (active only if this part is defined)
+    ////
+    // rest: {
+    //   ////
+    //   //// The HTTP port number (for all network interfaces).
+    //   //// You can bind on a specific interface setting a "<local_ip>:<port>" string.
+    //   ////
+    //   http_port: 8000,
+    // },
+  },
+
+  ////
+  //// zenoh related configuration (see zenoh documentation for more details)
+  ////
+
+  ////
+  //// id: The identifier (as hex-string) that zenoh-bridge-mqtt must use. If not set, a random UUIDv4 will be used.
+  //// WARNING: this id must be unique in your zenoh network.
+  // id: "A00001",
+
+  ////
+  //// mode: The bridge's mode (peer or client)
+  ////
+  //mode: "client",
+
+  ////
+  //// Which endpoints to connect to. E.g. tcp/localhost:7447.
+  //// By configuring the endpoints, it is possible to tell zenoh which router/peer to connect to at startup.
+  ////
+  connect: {
+    endpoints: [
+      // "<proto>/<ip>:<port>"
+    ]
+  },
+
+  ////
+  //// Which endpoints to listen on. E.g. tcp/localhost:7447.
+  //// By configuring the endpoints, it is possible to tell zenoh which are the endpoints that other routers, 
+  //// peers, or client can use to establish a zenoh session.
+  ////
+  listen: {
+    endpoints: [
+      // "<proto>/<ip>:<port>"
+    ]
+  },
+}

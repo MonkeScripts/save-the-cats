@@ -3,19 +3,22 @@
 This project uses Zenoh for communication between devices. Follow the steps below to set up Zenoh on your system.
 
 ## Zenoh Pico setup
-Adapted from [here](https://github.com/eclipse-zenoh/zenoh-pico)
+The platformio configuration is already in this repo. 
+1. Install platformio extension in Vscode.
+2. Add your own `secrets.h` file in `include` directory. This file would include: 
+    - Wifi SSID
+    - Wifi password
+    - Root CA cert in base64 (Cert generation would be explained in detail later)
+You can refer to the `dummy_secrets.h` to see what needs to be there.
 
-Include the following line in platformio.ini:
-```
-lib_deps = https://github.com/eclipse-zenoh/zenoh-pico
-```
+> Note: We are working on a forked version of Zenoh-pico. This is because they do not offer TLS communication for embedded devices. I have edited their source code to enable TLS communcation between the firebeetle and our computer. See this [PR](https://github.com/eclipse-zenoh/zenoh-pico/pull/1152) and its accompanying issue for better context.
 
 ## Setting up on linux computer
 Current setup on Ubuntu 22.04 LTS
 ### Zenoh router installation
 Adapted from https://zenoh.io/docs/getting-started/installation/
 
-1. Add Eclipse Zenoh public key to apt keyring
+1. Add Eclipse Zenoh public key to apt keyring:
     ```bash
     curl -L https://download.eclipse.org/zenoh/debian-repo/zenoh-public-key | sudo gpg --dearmor --yes --output /etc/apt/keyrings/zenoh-public-key.gpg
     ```
@@ -40,9 +43,9 @@ Set up [rust](https://doc.rust-lang.org/cargo/getting-started/installation.html)
 curl https://sh.rustup.rs -sSf | sh
 source $HOME/.cargo/env
 ```
-Clone the repository: https://github.com/eclipse-zenoh/zenoh-python
+Clone our fork: https://github.com/MonkeScripts/zenoh-python
 ```bash
-git clone https://github.com/eclipse-zenoh/zenoh-python
+git clone https://github.com/MonkeScripts/zenoh-python
 ```  
 In the cloned directory:
 
@@ -62,6 +65,65 @@ Build and install in development mode:
 
 maturin develop --release
 ```
+### Using tmuxp
+We use tmuxp to manage multiple tmux sessions. Install it via:
+```bash
+sudo apt install tmuxp
+```
+To start a tmux session, use:
+```bash
+tmuxp load <path-to-this-repo>/tmuxp/comms.yaml
+```
+### Zenoh mqtt bridge installation
+Adapted from: https://github.com/eclipse-zenoh/zenoh-plugin-mqtt
+Since we already have the keyrings and sources list set up from the zenoh installation, we can directly install the zenoh-bridge-mqtt package:
+```bash
+sudo apt install zenoh-bridge-mqtt
+```
+
+### Using mqtt explorer (mosquitto)
+To install mosquitto broker, download the deban package from https://mqtt-explorer.com/ and install it via:
+```bash
+sudo dpkg -i <deb-package-file>
+```
+You should then be able to see the mqtt explorer icon in your Applications.
+
+
+## Generating SSL/TLS certificates
+Adapted from: https://zenoh.io/docs/manual/tls/
+To enable secure communication using SSL/TLS, you need to generate the necessary certificates. We use minica to generate our certificates.
+First, install the [Go tools](https://golang.org/dl/) and set up your $GOPATH. Then, run:
+```bash
+go install github.com/jsha/minica@latest
+```
+In any directory run minica:
+```bash
+~/go/bin/minica --domains 127.0.0.1
+```
+On first run, minica will generate a keypair and a root certificate in the current directory, and will reuse that same keypair and root certificate unless they are deleted.
+
+On each run, minica will generate a new keypair and sign an end-entity (leaf) certificate for that keypair. The certificate will contain a list of DNS names and/or IP addresses from the command line flags. The key and certificate are placed in a new directory whose name is chosen as the first domain name from the certificate, or the first IP address if no domain names are present. It will not overwrite existing keys or certificates.
+
+The certificate will have a validity of 2 years and 30 days.
+
+After generating the certificates, you should expect the following files:
+- `minica.pem`: The root CA
+- `minica-key.pem`: The root CA key
+
+In the specific domain folder (e.g. 127.0.0.1 in this case):
+- `cert.pem`: Server side certificate
+- `key.pem`: Server side key
+
+Please add the root CA certificate into your `secrets.h` in the `include` folder.
+Please add the paths to these files in `local_computer/ROUTER_CONFIG.json5`, `local_computer/SESSION_CONFIG.json5`, `local_computer/BRIDGE_CONFIG.json5`
+>Note that `cert.pem` and `key.pem` are need for the MQTT explorer as well as the Unity program as well for MQTTS communication
+
+### Using MQTT explorer
+To enable MQTTS (MQTT + TLS), we need to add our own certificates into the application (Server side certificate and Server side key)
+1. Open the MQTT explorer and under the `advanced` setting portion, add `cert.pem` and `key.pem` accordingly (You should already have generated the certificates based on the previous step).
+2. Change the port to `8883` and toggle the TLS option
+You should be able to see the topics streaming in.
+
 ## Using the Ultra96 board
 ### Setting up ssh keys
 Refer to this https://www.digitalocean.com/community/tutorials/how-to-configure-ssh-key-based-authentication-on-a-linux-server to setup ssh keys. This is useful if you do not want to type in the password every time when you ssh in.
@@ -96,7 +158,24 @@ Set up a reverse ssh tunnel because the Ultra96 is behind the school's firewall.
     ```
     <img width="1101" height="107" alt="image" src="https://github.com/user-attachments/assets/b146dd6c-590b-4421-8a25-1f2be67b878d" />
 
-### Local computer changes for Ultra96 connection
+## Using Config files
+We use config files to simplify the connection setup. Each device has a `ROUTER_CONFIG.json5` and a `SESSION_CONFIG.json5` file in the our Zenoh Python fork.
+To run the examples with config files, use the following commands:
+For Routers:
+```bash
+zenohd -c <path-to-this-repo>/zenoh/configs/<device>/ROUTER_CONFIG.json5
+```
+For Publishers/Subscribers:
+```bash
+python3 zenoh_scripts/z_pub.py -c <path-to-this-repo>/zenoh/configs/<device>/SESSION_CONFIG.json5
+```
+### Setting up SoC VPN
+A small note to install the debian for **fortinet_vpn** only
+The other fortinet debians requires you to have an endpoint management system (which we do not)
+
+## Tests --WIP--
+
+### Testing Ultra96 connection
 In a tmux:
 1. Start the zenoh router on your computer, binding to port 7448:
     ```bash
@@ -107,10 +186,6 @@ In a tmux:
     (.venv) python3 examples/z_sub.py -e tcp/127.0.0.1:7448
     ```
     You should be then able to see messages being published from the Ultra96 board.
-
-### Setting up SoC VPN
-A small note to install the debian for **fortinet_vpn** only
-The other fortinet debians requires you to have an endpoint management system (which we do not)
 
 ## Testing the setup (Esp32 and local computer)
 1. Start the zenoh router on your computer:
