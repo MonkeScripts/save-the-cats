@@ -38,7 +38,15 @@ def main(conf: zenoh.Config, key: str, history: int):
         for idx in itertools.count():
 
             ax, ay, az, gx, gy, gz = [0.1, 0.2, 0.3, 0.4, 0.5, 0.6]
-            imu1 = {"ax": ax, "ay": ay, "az": az, "gx": gx, "gy": gy, "gz": gz}
+            imu1 = {
+                "ax": ax,
+                "ay": ay,
+                "az": az,
+                "gx": gx,
+                "gy": gy,
+                "gz": gz,
+                "action": 0,
+            }
             payload_string: str = json.dumps(imu1)
             # Adapted from https://github.com/eclipse-zenoh/zenoh-python/blob/1.0.0-beta.4/examples/z_bytes.py
             assert payload_string is not None

@@ -95,8 +95,7 @@
     ///
     /// See https://docs.rs/zenoh/latest/zenoh/config/struct.EndPoint.html
     // endpoints: { router: ["tcp/[::]:7447"], peer: ["tcp/[::]:0"] },
-    // endpoints: { router: ["tls/[::]:7447"], peer: ["tcp/[::]:0"] },
-    endpoints: { router: ["tls/[::]:7447"], peer: ["tcp/[::]:0"],  },
+    endpoints: { router: ["tls/192.168.0.93:7447", "tcp/0.0.0.0:7449"], peer: ["tcp/[::]:0"],  },
 
     /// Global listen configuration,
     /// Accepts a single value or different values for router, peer and client.
