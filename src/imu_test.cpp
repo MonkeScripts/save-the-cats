@@ -34,7 +34,6 @@ void loop() {
 
   Serial.print("Temp (°C): ");
   Serial.println(temp.temperature);
-
   Serial.println("------");
   delay(500);
 }
