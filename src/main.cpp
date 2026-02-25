@@ -17,6 +17,11 @@
 #include <WiFi.h>
 #include <time.h>
 #include <zenoh-pico.h>
+#include <Wire.h>
+#include <Adafruit_MPU6050.h>
+#include <Adafruit_Sensor.h>
+
+Adafruit_MPU6050 mpu;
 
 #include "secrets.h"
 
@@ -24,12 +29,13 @@
 
 // Client mode values (comment/uncomment as needed)
 #define MODE "client"
-#define LOCATOR "tls/192.168.0.93:7447"  // If empty, it will scout
+#define LOCATOR "tls/172.20.10.9:7447"
+//#define LOCATOR "tls/192.168.0.93:7447"  // If empty, it will scout
 // Peer mode values (comment/uncomment as needed)
 // #define MODE "peer"
 // #define LOCATOR "udp/224.0.0.225:7447#iface=en0"
 
-#define KEYEXPRPUB "esp/imu1"
+#define KEYEXPRPUB "esp/imu2/esp2"
 #define KEYEXPRSUB "computer/**"
 #define VALUE "[ARDUINO]{ESP32} Publication from Zenoh-Pico!"
 
@@ -104,14 +110,14 @@ void setup() {
     WiFi.begin(WIFI_SSID, WIFI_PASS);
     Serial.println("SSID: " + String(WIFI_SSID));
     Serial.printf("Password: %s\n", WIFI_PASS);
-    Serial.printf("ROOT CA %s\n", my_root_ca);
+    //Serial.printf("ROOT CA %s\n", my_root_ca);
     while (WiFi.status() != WL_CONNECTED) {
         Serial.println("Attempting to connect to WiFi...");
         delay(1000);
     }
     Serial.println(WiFi.localIP());
     Serial.println("OK");
-    // syncTime();
+    syncTime();
 
     // Initialize Zenoh Session and other parameters
     z_owned_config_t config;
@@ -138,7 +144,6 @@ void setup() {
             } else {
                 Serial.println("Disabled name verification");
             }
-
         } else {
             zp_config_insert(z_config_loan_mut(&config), Z_CONFIG_LISTEN_KEY, LOCATOR);
         }
@@ -215,6 +220,19 @@ void setup() {
     Serial.println("OK");
     Serial.println("Zenoh setup finished!");
 
+    // IMU initialization
+    Wire.begin(); // uses default SDA/SCL pins for your board
+
+    if (!mpu.begin()) {
+        Serial.println("Failed to find MPU6050 chip. Check wiring!");
+        while (1) delay(1000);
+    }
+    Serial.println("MPU6050 Found!");
+
+    mpu.setAccelerometerRange(MPU6050_RANGE_8_G);
+    mpu.setGyroRange(MPU6050_RANGE_500_DEG);
+    mpu.setFilterBandwidth(MPU6050_BAND_21_HZ);
+
     delay(300);
 }
 
@@ -222,14 +240,23 @@ void loop() {
     delay(500);
     // adapted from https://registry.platformio.org/libraries/bblanchon/ArduinoJson
     JsonDocument doc;
-    doc["ax"] = 0.1f;
-    doc["ay"] = 0.2f;
-    doc["az"] = 0.3f;
-    doc["gx"] = 0.4f;
-    doc["gy"] = 0.5f;
-    doc["gz"] = 0.6f;
-    doc["action"] = action;
-    char json_buf[4096];
+    
+    sensors_event_t a, g, temp;
+    mpu.getEvent(&a, &g, &temp);
+
+    // Accelerometer (m/s^2)
+    doc["ax"] = a.acceleration.x;
+    doc["ay"] = a.acceleration.y;
+    doc["az"] = a.acceleration.z;
+    
+    // Gyroscope (rad/s)
+    doc["gx"] = g.gyro.x;
+    doc["gy"] = g.gyro.y;
+    doc["gz"] = g.gyro.z;
+
+    doc["tempC"] = temp.temperature;
+
+    char json_buf[256]; //changed payload to be smaller
     serializeJson(doc, json_buf);
 
     if (strlen(json_buf) >= sizeof(json_buf)) {
