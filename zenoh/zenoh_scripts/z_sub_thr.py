@@ -13,6 +13,20 @@ def format_bytes(size):
     return f"{size:.2f} TB"
 
 
+PREFIXES = ["esp", "ultra", "computer", "phone"]
+
+
+def _new_state():
+    return {
+        "total_count": 0,
+        "total_bytes": 0,
+        "batch_count": 0,
+        "batch_bytes": 0,
+        "start_time": None,
+        "global_start": None,
+    }
+
+
 def main(conf: zenoh.Config, key: str, measure_count: int):
     zenoh.init_log_from_env_or("error")
     print(f"Current Config: {conf}")
@@ -21,27 +35,30 @@ def main(conf: zenoh.Config, key: str, measure_count: int):
     with zenoh.open(conf) as session:
         print(f"Subscribing to '{key}'...")
 
-        state = {
-            "total_count": 0,
-            "total_bytes": 0,
-            "batch_count": 0,
-            "batch_bytes": 0,
-            "start_time": None,
-            "global_start": None,
-        }
+        states = {prefix: _new_state() for prefix in PREFIXES}
 
         def listener(sample: zenoh.Sample):
             now = time.time()
+            key_str = str(sample.key_expr)
+
+            matched = next(
+                (p for p in PREFIXES if key_str == p or key_str.startswith(p + "/")),
+                None,
+            )
+            if matched is None:
+                return
+
+            state = states[matched]
             if state["global_start"] is None:
                 state["global_start"] = now
                 state["start_time"] = now
 
-            # Track counts and payload size
             payload_size = len(sample.payload)
             state["total_count"] += 1
             state["total_bytes"] += payload_size
             state["batch_count"] += 1
             state["batch_bytes"] += payload_size
+
             timestamp_str = (
                 sample.timestamp.to_string_rfc3339_lossy()
                 if sample.timestamp
@@ -59,7 +76,7 @@ def main(conf: zenoh.Config, key: str, measure_count: int):
                     msg_thr = state["batch_count"] / elapsed
                     byte_thr = state["batch_bytes"] / elapsed
 
-                    print(f"--- Statistics (Last {measure_count} msgs) ---")
+                    print(f"--- [{matched}] Statistics (Last {measure_count} msgs) ---")
                     print(f"  Throughput: {msg_thr:.2f} msgs/s")
                     print(f"  Bandwidth:  {format_bytes(byte_thr)}/s")
                     print(
@@ -85,15 +102,21 @@ def main(conf: zenoh.Config, key: str, measure_count: int):
         advanced_sub.sample_miss_listener(miss_listener)
         try:
             while True:
-                time.sleep(0.5)  # Print every 5 seconds
-                if state["global_start"]:
-                    total_elapsed = time.time() - state["global_start"]
-                    if total_elapsed > 0:
-                        avg_throughput = state["total_count"] / total_elapsed
-                        avg_bandwidth = state["total_bytes"] / total_elapsed
-                        print(f"\n--- Average (since start) ---")
-                        print(f"Avg Throughput: {avg_throughput:.2f} msgs/s")
-                        print(f"Avg Bandwidth:  {format_bytes(avg_bandwidth)}/s")
+                time.sleep(0.5)
+                now = time.time()
+                active = [p for p in PREFIXES if states[p]["global_start"] is not None]
+                if active:
+                    print(f"\n--- Average (since start) ---")
+                    for prefix in active:
+                        state = states[prefix]
+                        total_elapsed = now - state["global_start"]
+                        if total_elapsed > 0:
+                            avg_throughput = state["total_count"] / total_elapsed
+                            avg_bandwidth = state["total_bytes"] / total_elapsed
+                            print(
+                                f"  [{prefix}] {avg_throughput:.2f} msgs/s  {format_bytes(avg_bandwidth)}/s"
+                                f"  (total: {state['total_count']} msgs, {format_bytes(state['total_bytes'])})"
+                            )
         except KeyboardInterrupt:
             print("\nShutdown initiated")
 
