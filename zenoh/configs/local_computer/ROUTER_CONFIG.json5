@@ -95,7 +95,7 @@
     ///
     /// See https://docs.rs/zenoh/latest/zenoh/config/struct.EndPoint.html
     // endpoints: { router: ["tcp/127.0.0.1:7448", "tcp/0.0.0.0:7447"], peer: ["tcp/[::]:7447"],  },
-    endpoints: { router: ["tcp/127.0.0.1:7448", "tls/192.168.0.93:7447","tcp/0.0.0.0:7449" ], peer: ["tcp/[::]:7449"],  },
+    endpoints: { router: ["tls/0.0.0.0:7447","tcp/127.0.0.1:7448","tcp/0.0.0.0:7449" ], peer: ["tcp/[::]:7449"],  },
 
     /// Global listen configuration,
     /// Accepts a single value or different values for router, peer and client.
@@ -690,11 +690,11 @@
         /// Path to the certificate of the certificate authority used to validate either the server
         /// or the client's keys and certificates, depending on the node's mode. If not specified
         /// on router mode then the default WebPKI certificates are used instead.
-        root_ca_certificate: "/home/monkescripts/Documents/NUS/Y4S2/CG4002/captstone/tls/minica.pem",
+        root_ca_certificate: "/Users/timlau/minica.pem",
         /// Path to the TLS listening side private key
-        listen_private_key: "/home/monkescripts/Documents/NUS/Y4S2/CG4002/captstone/tls/127.0.0.1/key.pem",
+        listen_private_key: "/Users/timlau/laptop/key.pem",
         /// Path to the TLS listening side public certificate
-        listen_certificate: "/home/monkescripts/Documents/NUS/Y4S2/CG4002/captstone/tls/127.0.0.1/cert.pem",
+        listen_certificate: "/Users/timlau/laptop/cert.pem",
         ///  Enables mTLS (mutual authentication), client authentication
         enable_mtls: false,
         /// Path to the TLS connecting side private key
