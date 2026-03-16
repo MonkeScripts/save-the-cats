@@ -12,19 +12,19 @@
 //   ZettaScale Zenoh Team, <zenoh@zettascale.tech>
 //
 
+#include <Adafruit_GFX.h>
+#include <Adafruit_MPU6050.h>
+#include <Adafruit_SSD1306.h>
+#include <Adafruit_Sensor.h>
 #include <Arduino.h>
 #include <ArduinoJson.h>
 #include <WiFi.h>
+#include <Wire.h>
+#include <math.h>
 #include <time.h>
 #include <zenoh-pico.h>
-#include <Wire.h>
-#include <Adafruit_MPU6050.h>
-#include <Adafruit_Sensor.h>
-#include <math.h>
-#include <Adafruit_GFX.h>
-#include <Adafruit_SSD1306.h>
 
-//OLED display parameters
+// OLED display parameters
 #define SCREEN_WIDTH 128
 #define SCREEN_HEIGHT 64
 #define OLED_RESET -1
@@ -36,11 +36,11 @@ static uint32_t windows_sent = 0;
 static bool oled_ok = false;
 
 // Sliding window configuration
-static const uint32_t SAMPLE_DELAY_MS = 50;   // 20 Hz (delay(50))
+static const uint32_t SAMPLE_DELAY_MS = 50;  // 20 Hz (delay(50))
 static const int FS_HZ = 20;
 
-static const int WIN = 40;    // 2 seconds window @ 20 Hz
-static const int STRIDE = 20; // 1 second step (50% overlap)
+static const int WIN = 40;     // 2 seconds window @ 20 Hz
+static const int STRIDE = 20;  // 1 second step (50% overlap)
 
 // Ring buffer storage
 static float ax_buf[WIN], ay_buf[WIN], az_buf[WIN], avm_buf[WIN];
@@ -57,12 +57,12 @@ static int stride_counter = 0;
 // Client mode values (comment/uncomment as needed)
 #define MODE "client"
 #define LOCATOR "tls/172.20.10.9:7447"
-//#define LOCATOR "tls/192.168.0.93:7447"  // If empty, it will scout
-// Peer mode values (comment/uncomment as needed)
-// #define MODE "peer"
-// #define LOCATOR "udp/224.0.0.225:7447#iface=en0"
+// #define LOCATOR "tls/192.168.0.93:7447"  // If empty, it will scout
+//  Peer mode values (comment/uncomment as needed)
+//  #define MODE "peer"
+//  #define LOCATOR "udp/224.0.0.225:7447#iface=en0"
 
-#define KEYEXPRPUB "esp/imu1/esp1"
+#define KEYEXPRPUB "esp/imu2"
 #define KEYEXPRSUB "computer/**"
 #define VALUE "[ARDUINO]{ESP32} Publication from Zenoh-Pico!"
 
@@ -142,7 +142,7 @@ void setup() {
     }
     Serial.println("Starting Zenoh-Pico Arduino ESP32 example...");
     // ---- I2C + OLED init MUST happen before any oledStatus() calls ----
-    Wire.begin(); // or Wire.begin(21, 22);
+    Wire.begin();  // or Wire.begin(21, 22);
 
     oled_ok = display.begin(SSD1306_SWITCHCAPVCC, 0x3C);
     if (!oled_ok) {
@@ -168,17 +168,19 @@ void setup() {
     oledStatus("IMU WORKOUT SYS", "Waiting for WiFi");
     uint32_t last_anim = 0;
     int dots = 0;
-    //Serial.printf("ROOT CA %s\n", my_root_ca);
+    // Serial.printf("ROOT CA %s\n", my_root_ca);
     while (WiFi.status() != WL_CONNECTED) {
         Serial.println("Attempting to connect to WiFi...");
-            // OLED dots animation every 500 ms
+        // OLED dots animation every 500 ms
         uint32_t now = millis();
         if (now - last_anim > 500) {
             last_anim = now;
             dots = (dots + 1) % 4;
             char msg[22];
             snprintf(msg, sizeof(msg), "Waiting WiFi%s",
-                    dots == 0 ? "" : dots == 1 ? "." : dots == 2 ? ".." : "...");
+                     dots == 0 ? "" : dots == 1 ? "."
+                                  : dots == 2   ? ".."
+                                                : "...");
             oledStatus("IMU WORKOUT SYS", msg);
         }
         delay(1000);
@@ -294,7 +296,7 @@ void setup() {
     Serial.println("OK");
     Serial.println("Zenoh setup finished!");
 
-    //MPU6050 init
+    // MPU6050 init
     if (!mpu.begin()) {
         Serial.println("Failed to find MPU6050 chip. Check wiring!");
         while (1) delay(1000);
@@ -309,7 +311,7 @@ void setup() {
 }
 
 void loop() {
-    delay(50); // 20 Hz sampling
+    delay(50);  // 20 Hz sampling
 
     sensors_event_t a, g, temp;
     mpu.getEvent(&a, &g, &temp);
@@ -317,7 +319,7 @@ void loop() {
     float ax = a.acceleration.x;
     float ay = a.acceleration.y;
     float az = a.acceleration.z;
-    float avm = sqrtf(ax*ax + ay*ay + az*az);
+    float avm = sqrtf(ax * ax + ay * ay + az * az);
 
     uint32_t now_ms = millis();
 
@@ -344,10 +346,14 @@ void loop() {
         display.println((unsigned long)windows_sent);
 
         // Live values (latest sample)
-        display.print("AVM:"); display.println(avm, 2);
-        display.print("ax: "); display.println(ax, 2);
-        display.print("ay: "); display.println(ay, 2);
-        display.print("az: "); display.println(az, 2);
+        display.print("AVM:");
+        display.println(avm, 2);
+        display.print("ax: ");
+        display.println(ax, 2);
+        display.print("ay: ");
+        display.println(ay, 2);
+        display.print("az: ");
+        display.println(az, 2);
 
         display.display();
     }
@@ -380,9 +386,9 @@ void loop() {
     doc["fs_hz"] = FS_HZ;
     doc["t0_ms"] = t_buf[start_idx];
 
-    JsonArray axA  = doc.createNestedArray("ax");
-    JsonArray ayA  = doc.createNestedArray("ay");
-    JsonArray azA  = doc.createNestedArray("az");
+    JsonArray axA = doc.createNestedArray("ax");
+    JsonArray ayA = doc.createNestedArray("ay");
+    JsonArray azA = doc.createNestedArray("az");
     JsonArray avmA = doc.createNestedArray("avm");
 
     for (int i = 0; i < WIN; i++) {
@@ -426,4 +432,3 @@ void setup() {
 }
 void loop() {}
 #endif
-
