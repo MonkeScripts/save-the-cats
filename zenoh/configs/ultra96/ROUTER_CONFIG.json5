@@ -47,7 +47,9 @@
     /// See https://docs.rs/zenoh/latest/zenoh/config/struct.EndPoint.html
     endpoints: [
       // "<proto>/<address>"
-      "tcp/127.0.0.1:7448"
+      // "tcp/127.0.0.1:7448"
+      // "tcp/127.0.0.1:7447"  
+
     ],
 
     /// Global connect configuration,
@@ -95,7 +97,7 @@
     /// or different lists for router, peer and client (e.g. endpoints: { router: ["tcp/[::]:7447"], peer: ["tcp/[::]:0"] }).
     ///
     /// See https://docs.rs/zenoh/latest/zenoh/config/struct.EndPoint.html
-    endpoints: { router: ["tcp/[::]:7447"], peer: ["tcp/[::]:0"],  },
+    endpoints: { router: ["tls/[::]:7447"], peer: ["tcp/[::]:7449"],  },
 
     /// Global listen configuration,
     /// Accepts a single value or different values for router, peer and client.
@@ -689,22 +691,22 @@
         /// Path to the certificate of the certificate authority used to validate either the server
         /// or the client's keys and certificates, depending on the node's mode. If not specified
         /// on router mode then the default WebPKI certificates are used instead.
-        root_ca_certificate: null,
+        root_ca_certificate: "/home/xilinx/save-the-cats/tls/minica.pem",
         /// Path to the TLS listening side private key
-        listen_private_key: null,
+        listen_private_key: "/home/xilinx/save-the-cats/tls/100.125.252.109/key.pem",
         /// Path to the TLS listening side public certificate
-        listen_certificate: null,
+        listen_certificate: "/home/xilinx/save-the-cats/tls/100.125.252.109/cert.pem",
         ///  Enables mTLS (mutual authentication), client authentication
         enable_mtls: false,
         /// Path to the TLS connecting side private key
-        connect_private_key: null,
+        connect_private_key: "/home/xilinx/save-the-cats/tls/100.125.252.109/key.pem",
         /// Path to the TLS connecting side certificate
-        connect_certificate: null,
+        connect_certificate: "/home/xilinx/save-the-cats/tls/100.125.252.109/cert.pem",
         /// Whether or not to verify the matching between hostname/dns and certificate when connecting,
         /// if set to false zenoh will disregard the common names of the certificates when verifying servers.
         /// This could be dangerous because your CA can have signed a server cert for foo.com, that's later being used to host a server at baz.com. If you wan't your
         /// ca to verify that the server at baz.com is actually baz.com, let this be true (default).
-        verify_name_on_connect: true,
+        verify_name_on_connect: false,
         /// Whether or not to close links when remote certificates expires.
         /// If set to true, links that require certificates (tls/quic) will automatically disconnect when the time of expiration of the remote certificate chain is reached
         /// note that mTLS (client authentication) is required for a listener to disconnect a client on expiration
