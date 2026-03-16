@@ -265,3 +265,122 @@ In a tmux, using the config files:
 You should see messages being published from both the ESP32/FireBeetle and your computer.
 Here is an image:
 <img width="2560" height="1600" alt="image" src="https://github.com/user-attachments/assets/f52007e3-7214-4273-9919-3814f6f87a13" />
+
+## Zenoh + InfluxDB 2.x Setup
+
+### 1. Install InfluxDB 2.x (Ubuntu/Debian)
+
+Add the repository and install:
+
+```bash
+# influxdata-archive.key GPG fingerprint:
+#   Primary key fingerprint: 24C9 75CB A61A 024E E1B6  3178 7C3D 5715 9FC2 F927
+#   Subkey fingerprint:      9D53 9D90 D332 8DC7 D6C8  D3B9 D8FF 8E1F 7DF8 B07E
+wget -q https://repos.influxdata.com/influxdata-archive.key
+gpg --show-keys --with-fingerprint --with-colons ./influxdata-archive.key 2>&1 | grep -q '^fpr:\+24C975CBA61A024EE1B631787C3D57159FC2F927:' \
+  && cat influxdata-archive.key | gpg --dearmor \
+  | sudo tee /etc/apt/keyrings/influxdata-archive.gpg > /dev/null
+
+echo 'deb [signed-by=/etc/apt/keyrings/influxdata-archive.gpg] https://repos.influxdata.com/debian stable main' \
+  | sudo tee /etc/apt/sources.list.d/influxdata.list
+
+sudo apt update
+sudo apt install influxdb2 -y
+```
+
+Start the service:
+```bash
+sudo systemctl start influxdb
+sudo systemctl enable influxdb
+```
+
+Initial setup:
+```bash
+influx setup
+```
+You will be prompted for: username, password, organization name, bucket name, and retention period.
+
+Get your credentials:
+```bash
+influx org list          # Copy the hex ID (e.g. a51e53a6b98d9c2e)
+influx auth list --json  # Copy the full token string
+```
+
+### 2. Install the Zenoh InfluxDB v2 Backend Plugin
+
+Add the zenoh repo (if not already added):
+```bash
+echo "deb [trusted=yes] https://download.eclipse.org/zenoh/debian-repo/ /" \
+  | sudo tee -a /etc/apt/sources.list.d/zenoh.list > /dev/null
+sudo apt update
+```
+
+Install the plugin:
+```bash
+sudo apt install zenoh-backend-influxdb-v2
+```
+
+**Important: Rust version compatibility**
+
+Zenoh requires the plugin to be built with the exact same Rust compiler version as `zenohd`. Check with:
+```bash
+zenohd --version
+```
+
+If you see a mismatch error like `Incompatible rustc versions`, you need to build the plugin from source:
+```bash
+# Install Rust and set the version to match zenohd
+curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
+source ~/.cargo/env
+rustup install <rustc_version_from_zenohd>
+rustup default <rustc_version_from_zenohd>
+rustup toolchain  list  # Verify the correct version is active
+
+# Clone and build
+git clone https://github.com/eclipse-zenoh/zenoh-backend-influxdb.git
+cd zenoh-backend-influxdb
+git checkout <your_zenoh_version>   # e.g. 1.8.0
+cargo build +<rustc_version_from_zenohd> -p zenoh-backend-influxdb-v2
+
+# Replace the system .so file
+sudo cp target/release/libzenoh_backend_influxdb2.so /usr/lib/libzenoh_backend_influxdb2.so
+```
+
+### 3. Visualize in InfluxDB UI
+
+1. Open `http://localhost:8086` in your browser
+2. Go to **Data Explorer**
+3. Select your bucket (e.g. `example`)
+4. Select the measurement (your zenoh key)
+5. Select `value` under `_field`
+6. Click **SUBMIT**
+
+**Plotting numeric data as a graph**
+
+Use the Script Editor with this Flux query:
+```flux
+from(bucket: "example")
+  |> range(start: -1h)
+  |> filter(fn: (r) => r["_field"] == "value")
+  |> filter(fn: (r) => r["kind"] == "PUT")
+  |> toFloat()
+  |> aggregateWindow(every: 1s, fn: last, createEmpty: false)
+  |> yield(name: "zenoh_data")
+```
+
+> `toFloat()` only works if the stored values are plain numbers. If you stored non-numeric strings, delete the old data first:
+> ```bash
+> influx bucket delete --name example --org <your-org>
+> influx bucket create --name example --org <your-org>
+> ```
+
+### Quick Reference
+
+| Command | Purpose |
+|---------|---------|
+| `influx setup` | Initial InfluxDB setup |
+| `influx org list` | Get org hex ID |
+| `influx auth list --json` | Get full API token |
+| `influx bucket list` | List all buckets |
+| `influx bucket delete --name X --org Y` | Delete a bucket |
+| `influx bucket create --name X --org Y` | Create a bucket |
