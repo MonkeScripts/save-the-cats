@@ -96,10 +96,18 @@ First, install the [Go tools](https://golang.org/dl/) and set up your $GOPATH. T
 ```bash
 go install github.com/jsha/minica@latest
 ```
-In any directory run minica:
+Two certificates are needed — one for the local computer's TLS listener and one for the Ultra96's Tailscale IP:
+
+**Local computer cert** (TLS listener on local machine):
 ```bash
-~/go/bin/minica --domains 127.0.0.1
+~/go/bin/minica --ip-addresses 127.0.0.1
 ```
+
+**Ultra96 cert** (TLS listener on Ultra96 over Tailscale — replace `100.125.252.109` with the actual Tailscale IP if it changes):
+```bash
+~/go/bin/minica --ip-addresses 100.125.252.109
+```
+
 On first run, minica will generate a keypair and a root certificate in the current directory, and will reuse that same keypair and root certificate unless they are deleted.
 
 On each run, minica will generate a new keypair and sign an end-entity (leaf) certificate for that keypair. The certificate will contain a list of DNS names and/or IP addresses from the command line flags. The key and certificate are placed in a new directory whose name is chosen as the first domain name from the certificate, or the first IP address if no domain names are present. It will not overwrite existing keys or certificates.
@@ -110,12 +118,12 @@ After generating the certificates, you should expect the following files:
 - `minica.pem`: The root CA
 - `minica-key.pem`: The root CA key
 
-In the specific domain folder (e.g. 127.0.0.1 in this case):
+In each IP-specific folder (e.g. `127.0.0.1/` and `100.125.252.109/`):
 - `cert.pem`: Server side certificate
 - `key.pem`: Server side key
 
 Please add the root CA certificate into your `secrets.h` in the `include` folder.
-Please add the paths to these files in `local_computer/ROUTER_CONFIG.json5`, `local_computer/SESSION_CONFIG.json5`, `local_computer/BRIDGE_CONFIG.json5`
+Please add the paths to these files in `local_computer/ROUTER_CONFIG.json5`, `local_computer/SESSION_CONFIG.json5`, `local_computer/BRIDGE_CONFIG.json5`, `ultra96/ROUTER_CONFIG.json5`, and `ultra96/SESSION_CONFIG.json5`.
 >Note that `cert.pem` and `key.pem` are need for the MQTT explorer as well as the Unity program as well for MQTTS communication
 
 ### Using MQTT explorer
@@ -125,10 +133,57 @@ To enable MQTTS (MQTT + TLS), we need to add our own certificates into the appli
 You should be able to see the topics streaming in.
 
 ## Using the Ultra96 board
-### Setting up ssh keys
+### Setting up SSH keys
 Refer to this https://www.digitalocean.com/community/tutorials/how-to-configure-ssh-key-based-authentication-on-a-linux-server to setup ssh keys. This is useful if you do not want to type in the password every time when you ssh in.
 
-### Accessing the Ultra96 board
+### Current Approach: Tailscale
+The Ultra96 is accessed directly over Tailscale, which gives it a stable IP without requiring a VPN or reverse tunnel.
+
+1. Install Tailscale on both your local computer and the Ultra96:
+    ```bash
+    curl -fsSL https://tailscale.com/install.sh | sh
+    ```
+2. On each device, authenticate:
+    ```bash
+    sudo tailscale up
+    ```
+3. Find the Ultra96's Tailscale IP:
+    ```bash
+    tailscale ip -4
+    ```
+    (Current IP: `100.125.252.109`)
+
+4. Generate a TLS cert for the Ultra96's Tailscale IP using minica (run on your local machine where minica and the root CA keys are):
+    ```bash
+    ~/go/bin/minica --ip-addresses 100.125.252.109
+    ```
+    This creates `100.125.252.109/cert.pem` and `100.125.252.109/key.pem`.
+
+5. Copy the TLS directory to the Ultra96 (placing it at `/home/xilinx/save-the-cats/tls/`):
+    ```bash
+    scp -r 100.125.252.109 xilinx@100.125.252.109:/home/xilinx/save-the-cats/tls/
+    # Also copy minica.pem (root CA) if not already there
+    scp minica.pem xilinx@100.125.252.109:/home/xilinx/save-the-cats/tls/
+    ```
+
+6. Verify that `ultra96/ROUTER_CONFIG.json5` and `ultra96/SESSION_CONFIG.json5` point to the correct Tailscale IP cert paths. Update `local_computer/ROUTER_CONFIG.json5` `connect.endpoints` to use the correct Tailscale IP.
+
+7. SSH into the Ultra96 directly via Tailscale (no tunnel needed):
+    ```bash
+    ssh xilinx@100.125.252.109
+    ```
+
+8. Once logged into the Ultra96, you should be in the dedicated python virtual environment: `pynq-venv`. This is because the script to activate the virtual environment is already configured in the `/etc/profile.d/pynq_venv.sh`. **Note that zenoh python package is already installed in this virtual environment**.
+ If not in the environment, activate it by running:
+    ```bash
+    source /usr/local/share/pynq-venv/bin/activate
+    ```
+
+### Previous Approach: Reverse SSH Tunnel (SoC VPN / FortiClient)
+> Note: This approach required SoC VPN (FortiClient) to be active. It has been replaced by Tailscale.
+>
+> **Setting up SoC VPN**: Install the debian for **fortinet_vpn** only. The other fortinet debians require an endpoint management system (which we do not have).
+
 Set up a reverse ssh tunnel because the Ultra96 is behind the school's firewall.
 1. On your local computer, run:
     ```bash
@@ -169,23 +224,24 @@ For Publishers/Subscribers:
 ```bash
 python3 zenoh_scripts/z_pub.py -c <path-to-this-repo>/zenoh/configs/<device>/SESSION_CONFIG.json5
 ```
-### Setting up SoC VPN
-A small note to install the debian for **fortinet_vpn** only
-The other fortinet debians requires you to have an endpoint management system (which we do not)
 
 ## Tests --WIP--
 
 ### Testing Ultra96 connection
-In a tmux:
-1. Start the zenoh router on your computer, binding to port 7448:
+In a tmux, using the config files:
+1. On the Ultra96, start the Zenoh router:
     ```bash
-    zenohd -l tcp/[::]:7448
+    zenohd -c <path-to-repo>/zenoh/configs/ultra96/ROUTER_CONFIG.json5
     ```
-2. On your computer, activate the virtual environment and run the Zenoh subscriber example from the `examples/z_sub.py`, connecting to the Ultra96:
+2. On your local computer, start the Zenoh router (it will connect to the Ultra96 via Tailscale):
     ```bash
-    (.venv) python3 examples/z_sub.py -e tcp/127.0.0.1:7448
+    zenohd -c <path-to-repo>/zenoh/configs/local_computer/ROUTER_CONFIG.json5
     ```
-    You should be then able to see messages being published from the Ultra96 board.
+3. On your computer, run the Zenoh subscriber example:
+    ```bash
+    (.venv) python3 zenoh_scripts/z_sub.py -c <path-to-repo>/zenoh/configs/local_computer/SESSION_CONFIG.json5
+    ```
+    You should then be able to see messages being published from the Ultra96 board.
 
 ## Testing the setup (Esp32 and local computer)
 1. Start the zenoh router on your computer:
