@@ -20,8 +20,35 @@
 #include <Wire.h>
 #include <Adafruit_MPU6050.h>
 #include <Adafruit_Sensor.h>
+#include <math.h>
+#include <Adafruit_GFX.h>
+#include <Adafruit_SSD1306.h>
 
+//OLED display parameters
+#define SCREEN_WIDTH 128
+#define SCREEN_HEIGHT 64
+#define OLED_RESET -1
+Adafruit_SSD1306 display(SCREEN_WIDTH, SCREEN_HEIGHT, &Wire, OLED_RESET);
 Adafruit_MPU6050 mpu;
+static uint32_t last_oled_ms = 0;
+static const uint32_t OLED_PERIOD_MS = 200;  // 5 Hz
+static uint32_t windows_sent = 0;
+static bool oled_ok = false;
+
+// Sliding window configuration
+static const uint32_t SAMPLE_DELAY_MS = 50;   // 20 Hz (delay(50))
+static const int FS_HZ = 20;
+
+static const int WIN = 40;    // 2 seconds window @ 20 Hz
+static const int STRIDE = 20; // 1 second step (50% overlap)
+
+// Ring buffer storage
+static float ax_buf[WIN], ay_buf[WIN], az_buf[WIN], avm_buf[WIN];
+static uint32_t t_buf[WIN];
+
+static int write_idx = 0;
+static int samples_seen = 0;
+static int stride_counter = 0;
 
 #include "secrets.h"
 
@@ -35,7 +62,7 @@ Adafruit_MPU6050 mpu;
 // #define MODE "peer"
 // #define LOCATOR "udp/224.0.0.225:7447#iface=en0"
 
-#define KEYEXPRPUB "esp/imu2/esp2"
+#define KEYEXPRPUB "esp/imu1/esp1"
 #define KEYEXPRSUB "computer/**"
 #define VALUE "[ARDUINO]{ESP32} Publication from Zenoh-Pico!"
 
@@ -96,6 +123,17 @@ void data_handler(z_loaned_sample_t* sample, void* arg) {
     z_string_drop(z_string_move(&value));
 }
 
+void oledStatus(const char* line1, const char* line2) {
+    if (!oled_ok) return;  // <-- prevents crash if OLED not ready
+    display.clearDisplay();
+    display.setCursor(0, 0);
+    display.setTextSize(1);
+    display.setTextColor(SSD1306_WHITE);
+    display.println(line1);
+    display.println(line2);
+    display.display();
+}
+
 void setup() {
     // Initialize Serial for debug
     Serial.begin(115200);
@@ -103,20 +141,56 @@ void setup() {
         delay(1000);
     }
     Serial.println("Starting Zenoh-Pico Arduino ESP32 example...");
+    // ---- I2C + OLED init MUST happen before any oledStatus() calls ----
+    Wire.begin(); // or Wire.begin(21, 22);
+
+    oled_ok = display.begin(SSD1306_SWITCHCAPVCC, 0x3C);
+    if (!oled_ok) {
+        Serial.println("OLED init failed (0x3C).");
+    } else {
+        display.clearDisplay();
+        display.setTextSize(1);
+        display.setTextColor(SSD1306_WHITE);
+        display.setCursor(0, 0);
+        display.println("IMU WORKOUT SYS");
+        display.println("Booting...");
+        display.display();
+        delay(500);
+    }
 
     // Set WiFi in STA mode and trigger attachment
-    Serial.print("Connecting to WiFi: ...");
     WiFi.mode(WIFI_STA);
     WiFi.begin(WIFI_SSID, WIFI_PASS);
     Serial.println("SSID: " + String(WIFI_SSID));
     Serial.printf("Password: %s\n", WIFI_PASS);
+
+    Serial.print("Connecting to WiFi: ...");
+    oledStatus("IMU WORKOUT SYS", "Waiting for WiFi");
+    uint32_t last_anim = 0;
+    int dots = 0;
     //Serial.printf("ROOT CA %s\n", my_root_ca);
     while (WiFi.status() != WL_CONNECTED) {
         Serial.println("Attempting to connect to WiFi...");
+            // OLED dots animation every 500 ms
+        uint32_t now = millis();
+        if (now - last_anim > 500) {
+            last_anim = now;
+            dots = (dots + 1) % 4;
+            char msg[22];
+            snprintf(msg, sizeof(msg), "Waiting WiFi%s",
+                    dots == 0 ? "" : dots == 1 ? "." : dots == 2 ? ".." : "...");
+            oledStatus("IMU WORKOUT SYS", msg);
+        }
         delay(1000);
     }
+
     Serial.println(WiFi.localIP());
     Serial.println("OK");
+
+    // Show connected screen for 2 seconds
+    oledStatus("IMU WORKOUT SYS", "WiFi connected");
+    delay(2000);
+
     syncTime();
 
     // Initialize Zenoh Session and other parameters
@@ -220,9 +294,7 @@ void setup() {
     Serial.println("OK");
     Serial.println("Zenoh setup finished!");
 
-    // IMU initialization
-    Wire.begin(); // uses default SDA/SCL pins for your board
-
+    //MPU6050 init
     if (!mpu.begin()) {
         Serial.println("Failed to find MPU6050 chip. Check wiring!");
         while (1) delay(1000);
@@ -237,39 +309,102 @@ void setup() {
 }
 
 void loop() {
-    delay(500);
-    // adapted from https://registry.platformio.org/libraries/bblanchon/ArduinoJson
-    JsonDocument doc;
-    
+    delay(50); // 20 Hz sampling
+
     sensors_event_t a, g, temp;
     mpu.getEvent(&a, &g, &temp);
 
-    // Accelerometer (m/s^2)
-    doc["ax"] = a.acceleration.x;
-    doc["ay"] = a.acceleration.y;
-    doc["az"] = a.acceleration.z;
-    
-    // Gyroscope (rad/s)
-    doc["gx"] = g.gyro.x;
-    doc["gy"] = g.gyro.y;
-    doc["gz"] = g.gyro.z;
+    float ax = a.acceleration.x;
+    float ay = a.acceleration.y;
+    float az = a.acceleration.z;
+    float avm = sqrtf(ax*ax + ay*ay + az*az);
 
-    doc["tempC"] = temp.temperature;
+    uint32_t now_ms = millis();
 
-    char json_buf[256]; //changed payload to be smaller
-    serializeJson(doc, json_buf);
+    // ===== OLED update at 5 Hz (unchanged) =====
+    if (now_ms - last_oled_ms > OLED_PERIOD_MS) {
+        last_oled_ms = now_ms;
 
-    if (strlen(json_buf) >= sizeof(json_buf)) {
-        Serial.println("Error: length of payload exceeds allocated json_buf");
-        return;
+        display.clearDisplay();
+        display.setCursor(0, 0);
+
+        display.println("IMU WORKOUT SYS");
+
+        // Line 2: FS + Window length
+        display.print("FS:");
+        display.print(FS_HZ);
+        display.print("Hz  W:");
+        display.print((float)WIN / (float)FS_HZ, 1);
+        display.println("s");
+
+        // Line 3: Stride + windows sent
+        display.print("S:");
+        display.print((float)STRIDE / (float)FS_HZ, 1);
+        display.print("s   # ");
+        display.println((unsigned long)windows_sent);
+
+        // Live values (latest sample)
+        display.print("AVM:"); display.println(avm, 2);
+        display.print("ax: "); display.println(ax, 2);
+        display.print("ay: "); display.println(ay, 2);
+        display.print("az: "); display.println(az, 2);
+
+        display.display();
     }
 
-    Serial.print("Writing Data ('");
-    Serial.print(KEYEXPRPUB);
-    Serial.print("': '");
-    Serial.print(json_buf);
-    Serial.println("')");
+    // ===== Push sample into ring buffer =====
+    ax_buf[write_idx] = ax;
+    ay_buf[write_idx] = ay;
+    az_buf[write_idx] = az;
+    avm_buf[write_idx] = avm;
+    t_buf[write_idx] = now_ms;
 
+    write_idx = (write_idx + 1) % WIN;
+    samples_seen++;
+
+    // Wait until first full window
+    if (samples_seen < WIN) return;
+
+    // Publish every STRIDE samples
+    stride_counter++;
+    if (stride_counter < STRIDE) return;
+    stride_counter = 0;
+
+    // ===== Build window JSON payload =====
+    // Window payload is much larger than 256 bytes.
+    StaticJsonDocument<4096> doc;
+
+    // write_idx points to the oldest sample (next write location)
+    int start_idx = write_idx;
+
+    doc["fs_hz"] = FS_HZ;
+    doc["t0_ms"] = t_buf[start_idx];
+
+    JsonArray axA  = doc.createNestedArray("ax");
+    JsonArray ayA  = doc.createNestedArray("ay");
+    JsonArray azA  = doc.createNestedArray("az");
+    JsonArray avmA = doc.createNestedArray("avm");
+
+    for (int i = 0; i < WIN; i++) {
+        int idx = (start_idx + i) % WIN;
+        axA.add(ax_buf[idx]);
+        ayA.add(ay_buf[idx]);
+        azA.add(az_buf[idx]);
+        avmA.add(avm_buf[idx]);
+    }
+
+    char json_buf[2048];
+    size_t n = serializeJson(doc, json_buf, sizeof(json_buf));
+    if (n == 0) {
+        Serial.println("Error: json_buf too small for window payload");
+        return;
+    }
+    windows_sent++;
+
+    // (Optional) Don't print the whole window every time; it's huge
+    Serial.printf("Publishing window: WIN=%d STRIDE=%d t0=%lu\n", WIN, STRIDE, (unsigned long)doc["t0_ms"]);
+
+    // ===== Zenoh publish (same as before) =====
     z_owned_bytes_t payload;
     z_bytes_copy_from_str(&payload, json_buf);
 
@@ -281,7 +416,7 @@ void loop() {
     options.encoding = z_encoding_move(&encoding);
 
     if (z_publisher_put(z_publisher_loan(&pub), z_bytes_move(&payload), &options) < 0) {
-        Serial.println("Error while publishing data");
+        Serial.println("Error while publishing window data");
     }
 }
 #else
