@@ -32,23 +32,11 @@ Adafruit_SSD1306 display(SCREEN_WIDTH, SCREEN_HEIGHT, &Wire, OLED_RESET);
 Adafruit_MPU6050 mpu;
 static uint32_t last_oled_ms = 0;
 static const uint32_t OLED_PERIOD_MS = 200;  // 5 Hz
-static uint32_t windows_sent = 0;
 static bool oled_ok = false;
 
-// Sliding window configuration
-static const uint32_t SAMPLE_DELAY_MS = 50;  // 20 Hz (delay(50))
-static const int FS_HZ = 20;
-
-static const int WIN = 40;     // 2 seconds window @ 20 Hz
-static const int STRIDE = 20;  // 1 second step (50% overlap)
-
-// Ring buffer storage
-static float ax_buf[WIN], ay_buf[WIN], az_buf[WIN], avm_buf[WIN];
-static uint32_t t_buf[WIN];
-
-static int write_idx = 0;
-static int samples_seen = 0;
-static int stride_counter = 0;
+//IMU parameters
+static const uint32_t SAMPLE_DELAY_MS = 100;  // 10 Hz
+static const int FS_HZ = 10;
 
 #include "secrets.h"
 
@@ -62,7 +50,7 @@ static int stride_counter = 0;
 //  #define MODE "peer"
 //  #define LOCATOR "udp/224.0.0.225:7447#iface=en0"
 
-#define KEYEXPRPUB "esp/imu2"
+#define KEYEXPRPUB "esp/arm"
 #define KEYEXPRSUB "computer/**"
 #define VALUE "[ARDUINO]{ESP32} Publication from Zenoh-Pico!"
 
@@ -311,7 +299,7 @@ void setup() {
 }
 
 void loop() {
-    delay(50);  // 20 Hz sampling
+    delay(SAMPLE_DELAY_MS);  // 10 Hz sampling
 
     sensors_event_t a, g, temp;
     mpu.getEvent(&a, &g, &temp);
@@ -320,8 +308,27 @@ void loop() {
     float ay = a.acceleration.y;
     float az = a.acceleration.z;
     float avm = sqrtf(ax * ax + ay * ay + az * az);
-
     uint32_t now_ms = millis();
+
+    //Create JSON payload
+    StaticJsonDocument<256> doc;
+    doc["fs_hz"] = FS_HZ;
+    doc["t_ms"] = now_ms;
+    doc["ax"] = ax;
+    doc["ay"] = ay;
+    doc["az"] = az;
+    doc["avm"] = avm;
+
+    char json_buf[256];
+    size_t n = serializeJson(doc, json_buf, sizeof(json_buf));
+    if (n == 0) {
+        Serial.println("Error: json_buf too small");
+        return;
+    }
+
+    //Serial output
+    Serial.printf("Publishing sample: t=%lu ax=%.2f ay=%.2f az=%.2f avm=%.2f\n",
+                  (unsigned long)now_ms, ax, ay, az, avm);
 
     // ===== OLED update at 5 Hz (unchanged) =====
     if (now_ms - last_oled_ms > OLED_PERIOD_MS) {
@@ -335,17 +342,12 @@ void loop() {
         // Line 2: FS + Window length
         display.print("FS:");
         display.print(FS_HZ);
-        display.print("Hz  W:");
-        display.print((float)WIN / (float)FS_HZ, 1);
-        display.println("s");
+        display.println("Hz");
 
-        // Line 3: Stride + windows sent
-        display.print("S:");
-        display.print((float)STRIDE / (float)FS_HZ, 1);
-        display.print("s   # ");
-        display.println((unsigned long)windows_sent);
+        display.print("Streaming");
+        display.println(" live data");
 
-        // Live values (latest sample)
+        // Live values
         display.print("AVM:");
         display.println(avm, 2);
         display.print("ax: ");
@@ -358,57 +360,6 @@ void loop() {
         display.display();
     }
 
-    // ===== Push sample into ring buffer =====
-    ax_buf[write_idx] = ax;
-    ay_buf[write_idx] = ay;
-    az_buf[write_idx] = az;
-    avm_buf[write_idx] = avm;
-    t_buf[write_idx] = now_ms;
-
-    write_idx = (write_idx + 1) % WIN;
-    samples_seen++;
-
-    // Wait until first full window
-    if (samples_seen < WIN) return;
-
-    // Publish every STRIDE samples
-    stride_counter++;
-    if (stride_counter < STRIDE) return;
-    stride_counter = 0;
-
-    // ===== Build window JSON payload =====
-    // Window payload is much larger than 256 bytes.
-    StaticJsonDocument<4096> doc;
-
-    // write_idx points to the oldest sample (next write location)
-    int start_idx = write_idx;
-
-    doc["fs_hz"] = FS_HZ;
-    doc["t0_ms"] = t_buf[start_idx];
-
-    JsonArray axA = doc.createNestedArray("ax");
-    JsonArray ayA = doc.createNestedArray("ay");
-    JsonArray azA = doc.createNestedArray("az");
-    JsonArray avmA = doc.createNestedArray("avm");
-
-    for (int i = 0; i < WIN; i++) {
-        int idx = (start_idx + i) % WIN;
-        axA.add(ax_buf[idx]);
-        ayA.add(ay_buf[idx]);
-        azA.add(az_buf[idx]);
-        avmA.add(avm_buf[idx]);
-    }
-
-    char json_buf[2048];
-    size_t n = serializeJson(doc, json_buf, sizeof(json_buf));
-    if (n == 0) {
-        Serial.println("Error: json_buf too small for window payload");
-        return;
-    }
-    windows_sent++;
-
-    // (Optional) Don't print the whole window every time; it's huge
-    Serial.printf("Publishing window: WIN=%d STRIDE=%d t0=%lu\n", WIN, STRIDE, (unsigned long)doc["t0_ms"]);
 
     // ===== Zenoh publish (same as before) =====
     z_owned_bytes_t payload;
@@ -422,7 +373,7 @@ void loop() {
     options.encoding = z_encoding_move(&encoding);
 
     if (z_publisher_put(z_publisher_loan(&pub), z_bytes_move(&payload), &options) < 0) {
-        Serial.println("Error while publishing window data");
+        Serial.println("Error while publishing sample data");
     }
 }
 #else
