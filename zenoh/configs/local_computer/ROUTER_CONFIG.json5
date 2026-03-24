@@ -98,7 +98,7 @@
     // endpoints: { router: ["tcp/127.0.0.1:7448", "tcp/0.0.0.0:7447"], peer: ["tcp/[::]:7447"],  },
     // endpoints: { router: ["tcp/127.0.0.1:7448", "tls/192.168.0.93:7447","tcp/0.0.0.0:7449" ], peer: ["tcp/[::]:7449"],  },
     // endpoints: { router: ["tcp/127.0.0.1:7448",  "tls/172.20.10.2:7447","tcp/0.0.0.0:7449" ], peer: ["tcp/[::]:7449"],  },
-    endpoints: { router: [ "tcp/127.0.0.1:7447", "tcp/0.0.0.0:7449" ], peer: ["tcp/[::]:7449"],  },
+    endpoints: { router: [ "tcp/127.0.0.1:7447", "tcp/0.0.0.0:7449" , "tls/172.20.10.2:7447"], peer: ["tcp/[::]:7449"],  },
 
     /// Global listen configuration,
     /// Accepts a single value or different values for router, peer and client.
@@ -847,7 +847,7 @@
       },
       storages: {
         influx_demo2: {
-          key_expr: "demo/**",
+          key_expr: "esp/**",
           volume: {
             id: "influxdb2",
             db: "monkebucket",
