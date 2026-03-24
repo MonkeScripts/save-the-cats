@@ -2,13 +2,17 @@ session_name: hardware
 start_directory: /Users/timlau/Documents/Y4S2/Capstone_4002/zenoh-python
 
 windows:
+  - window_name: influxdb
+    panes:
+      - influxd
+
   - window_name: router
     shell_command_before:
       - conda deactivate || true
       - conda deactivate || true
       - source .venv/bin/activate
     panes:
-      - zenohd -c /Users/timlau/Documents/Y4S2/Capstone_4002/save-the-cats/zenoh/configs/local_computer/ROUTER_CONFIG.json5
+      - sleep 3 && zenohd -c /Users/timlau/Documents/Y4S2/Capstone_4002/save-the-cats/zenoh/configs/local_computer/ROUTER_CONFIG.json5
 
   - window_name: subscriber
     shell_command_before:

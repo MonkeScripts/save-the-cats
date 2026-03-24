@@ -355,6 +355,9 @@ sudo cp target/release/libzenoh_backend_influxdb2.so /usr/lib/libzenoh_backend_i
 5. Select `value` under `_field`
 6. Click **SUBMIT**
 
+ <img width="2370" height="1301" alt="image" src="https://github.com/user-attachments/assets/121b9183-3d19-457b-acd7-bdd26037c958" />
+
+
 **Plotting numeric data as a graph**
 
 Use the Script Editor with this Flux query:
