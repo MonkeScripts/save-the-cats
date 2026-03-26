@@ -35,7 +35,7 @@ import numpy as np
 import torch
 import torch.nn as nn
 
-sys.path.insert(0, os.path.join(os.path.dirname(__file__)))
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from model import ExerciseCNN
 
 CLASSES = ["high_knees", "pushup", "situp", "lunge", "squat", "overhead_hold", "unknown"]

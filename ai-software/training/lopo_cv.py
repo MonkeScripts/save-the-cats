@@ -14,6 +14,7 @@ import torch.optim as optim
 from torch.utils.data import DataLoader, TensorDataset
 import numpy as np
 import os
+import sys
 import json
 import time
 from collections import defaultdict
@@ -21,6 +22,10 @@ from collections import defaultdict
 import matplotlib
 matplotlib.use('Agg')
 import matplotlib.pyplot as plt
+
+_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+sys.path.insert(0, _root)
+sys.path.insert(0, os.path.join(_root, 'data_pipeline'))
 
 from model import ExerciseCNN
 from convert_real_data import (

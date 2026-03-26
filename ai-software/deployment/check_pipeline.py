@@ -70,7 +70,7 @@ def main():
 
     print("\n  Step 2: Model Definition")
     try:
-        sys.path.insert(0, "software")
+        sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
         from model import ExerciseCNN
         import torch
 

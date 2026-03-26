@@ -115,7 +115,7 @@ def load_engine(use_cpu=False, xmodel_path=XMODEL_PATH):
         import torch
         import sys
         import os
-        sys.path.insert(0, os.path.dirname(__file__))
+        sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
         from model import ExerciseCNN
 
         model = ExerciseCNN(num_features=12, num_classes=7)
