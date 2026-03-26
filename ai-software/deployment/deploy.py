@@ -177,7 +177,7 @@ class CPUInference:
         self.model = None
         try:
             import torch
-            sys.path.insert(0, os.path.dirname(__file__))
+            sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
             from model import ExerciseCNN
 
             self.model = ExerciseCNN(num_features=12, num_classes=7)
