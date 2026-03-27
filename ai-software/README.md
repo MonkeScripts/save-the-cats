@@ -6,6 +6,25 @@ The system classifies 7 exercises — `high_knees`, `pushup`, `situp`, `lunge`, 
 
 ---
 
+## Prerequisites
+
+- Python 3.10+
+- Install dependencies:
+
+```bash
+pip install -r requirements.txt
+```
+
+**Optional dependencies** (not in `requirements.txt`):
+
+| Package | Where needed |
+|---------|-------------|
+| `zenoh` | `record_data.py`, `deploy.py`, `repub.py` — data collection and runtime |
+| `vai_q_pytorch` / `vai_q_onnx` | `quantize.py` — inside Vitis AI Docker only |
+| `vart`, `pynq` | `deploy.py` — pre-installed on Ultra96 PYNQ image |
+
+---
+
 ## Directory Structure
 
 ```
