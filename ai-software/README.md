@@ -272,6 +272,47 @@ python deployment/power_management.py  # power analysis
 
 ---
 
+## Ultra96 Setup
+
+### Install dependencies on Ultra96
+
+```bash
+pip install eclipse-zenoh
+pip install numpy
+```
+
+> `vart` and `pynq` are pre-installed on the PYNQ image — do not reinstall them.
+
+### After every reboot
+
+VART hardcodes the xclbin path to `/run/media/mmcblk0p1/` but the SD card is mounted at `/boot`. This symlink must be recreated after every reboot:
+
+```bash
+cd ~/ai-demo/dpu_overlay
+bash load_dpu.sh
+
+sudo mkdir -p /run/media/mmcblk0p1
+sudo cp ~/ai-demo/dpu_overlay/dpu.xclbin /run/media/mmcblk0p1/
+```
+
+### Run inference on Ultra96
+
+```bash
+source /etc/profile.d/xrt_setup.sh
+/home/xilinx/run.sh repub.py -c /home/xilinx/save-the-cats/zenoh/configs/ultra96/SESSION_CONFIG.json5
+```
+
+> **Note:** VART requires `/opt/python3.9/bin/python3.9` — the system `python3` (3.10.4) cannot load `vart.so`. The `run.sh` wrapper handles this automatically.
+
+### Copy model files to Ultra96
+
+```bash
+scp models/compiled/exercise_cnn.xmodel xilinx@pynq:~/ai-demo/dpu_overlay/
+scp models/norm_mean.npy models/norm_std.npy xilinx@pynq:~/ai-demo/dpu_overlay/
+```
+
+---
+
 ## Hardware Target
 
 - **Board:** Ultra96-V2 (Xilinx Zynq UltraScale+ ZU3EG)
