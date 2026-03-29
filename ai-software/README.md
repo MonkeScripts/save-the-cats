@@ -260,10 +260,7 @@ python deployment/deploy_demo.py   # simulate deployment on laptop
 
 On Ultra96:
 ```bash
-sudo -E LD_LIBRARY_PATH=/opt/python3.9/lib:/usr/lib \
-     PYTHONPATH=/usr/lib/python3.9/site-packages:/usr/local/lib/python3.10/dist-packages \
-     /opt/python3.9/bin/python3.9 deployment/repub.py \
-     -c /home/xilinx/save-the-cats/zenoh/configs/ultra96/SESSION_CONFIG.json5
+/home/xilinx/run.sh repub.py -c /home/xilinx/save-the-cats/zenoh/configs/ultra96/SESSION_CONFIG.json5
 ```
 
 ### 5. Utilities
