@@ -8,6 +8,8 @@ The system classifies 7 exercises — `high_knees`, `pushup`, `situp`, `lunge`, 
 
 ## Prerequisites
 
+### Local development (laptop)
+
 - Python 3.10+
 - Install dependencies:
 
@@ -15,11 +17,15 @@ The system classifies 7 exercises — `high_knees`, `pushup`, `situp`, `lunge`, 
 pip install -r requirements.txt
 ```
 
+### Ultra96-V2
+
+The Ultra96 runs on its own Python environment managed by the PYNQ image. Do not use `requirements.txt` on the board — the required packages (`vart`, `pynq`, `zenoh`) are either pre-installed or installed separately. Use the `sudo -E` command shown in the [Runtime](#runtime) section to launch scripts with the correct library paths.
+
 **Optional dependencies** (not in `requirements.txt`):
 
 | Package | Where needed |
 |---------|-------------|
-| `zenoh` | `record_data.py`, `deploy.py`, `repub.py` — data collection and runtime |
+| `zenoh` | `deploy.py`, `repub.py` — runtime on Ultra96 |
 | `vai_q_pytorch` / `vai_q_onnx` | `quantize.py` — inside Vitis AI Docker only |
 | `vart`, `pynq` | `deploy.py` — pre-installed on Ultra96 PYNQ image |
 
@@ -44,8 +50,8 @@ The pipeline has 10 steps, from raw IMU data to a deployed DPU model running on 
 ```
 [Data Collection] → [Training] → [Evaluation] → [Quantization] → [Compilation] → [Deployment]
       ↓                  ↓              ↓               ↓                ↓               ↓
-record_data.py      train.py      evaluate.py      quantize.py      compile.py      deploy.py
-convert_real_data.py              benchmark.py     (Docker)         (Docker)        repub.py
+convert_real_data.py  train.py    evaluate.py      quantize.py      compile.py      deploy.py
+generate_data.py                  benchmark.py     (Docker)         (Docker)        repub.py
 generate_data.py                  simulate.py
 ```
 
@@ -78,11 +84,6 @@ The Conv1D layers are internally mapped to Conv2D with height=1 for DPU compatib
 Generates 1,400 synthetic training samples (200 per class) by simulating realistic IMU signals for each exercise. Each class has distinct signal characteristics — for example, `high_knees` produces 2–3 Hz rapid oscillations with strong thigh acceleration, while `overhead_hold` shows elevated wrist position with fatigue tremor.
 
 Use this to test the pipeline end-to-end without real sensor hardware.
-
-### `record_data.py`
-Live IMU recorder. Subscribes to 3 Zenoh topics (`esp/imu1`, `esp/imu2`, `esp/imu3`) from ESP32 sensors and saves timestamped readings to CSV. The user labels exercises in real time using keyboard input (0–5 for each class, `p` to pause, `q` to quit).
-
-**Output:** `data/recordings/recording_YYYYMMDD_HHMMSS.csv`
 
 ### `convert_log_to_npy.py`
 Converts raw CSV recordings from `record_data.py` into windowed `.npy` arrays ready for training. Aligns the 3 sensors by timestamp (within 20ms tolerance), then segments the time series into sliding windows.
@@ -259,7 +260,10 @@ python deployment/deploy_demo.py   # simulate deployment on laptop
 
 On Ultra96:
 ```bash
-python deployment/deploy.py        # or deployment/repub.py
+sudo -E LD_LIBRARY_PATH=/opt/python3.9/lib:/usr/lib \
+     PYTHONPATH=/usr/lib/python3.9/site-packages:/usr/local/lib/python3.10/dist-packages \
+     /opt/python3.9/bin/python3.9 deployment/repub.py \
+     -c /home/xilinx/save-the-cats/zenoh/configs/ultra96/SESSION_CONFIG.json5
 ```
 
 ### 5. Utilities
