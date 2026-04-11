@@ -1,16 +1,13 @@
 """
-CG4002 B02 - Step 4: Model Evaluation (7 Classes)
-===================================================
-Covers Task 5 demo requirements:
+CG4002 B02 - Model Evaluation (7 Classes)
+==========================================
   - Confusion matrix (counts + normalized)
   - Classification report (precision, recall, F1 per class)
   - Per-class accuracy bar chart
-  - Inference timing on CPU (baseline for FPGA comparison later)
-  - Model validation summary
+  - CPU inference timing (baseline for DPU comparison)
 
 Usage:
-  cd cg4002-ai-demo
-  python software/evaluate.py
+  python evaluate.py
 """
 
 import torch
@@ -25,15 +22,13 @@ import seaborn as sns
 from tabulate import tabulate
 
 import sys
-sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-from model import ExerciseCNN
-
-CLASSES = ["high_knees", "pushup", "situp", "lunge", "squat", "overhead_hold", "unknown"]
+sys.path.insert(0, os.path.join(os.path.dirname(__file__)))
+from model import ExerciseCNN, CLASSES
 NUM_CLASSES = len(CLASSES)
 
 
 def load_model_and_data():
-    """Load trained model and normalized test data."""
+    """Load trained model and normalized test set."""
     mean = np.load("models/norm_mean.npy")
     std  = np.load("models/norm_std.npy")
 
@@ -41,7 +36,8 @@ def load_model_and_data():
     y_test = np.load("data/test/y.npy")
     X_test = ((X_test - mean) / std).astype(np.float32)
 
-    model = ExerciseCNN(num_features=12, num_classes=7)
+    num_features = X_test.shape[-1]
+    model = ExerciseCNN(num_features=num_features, num_classes=NUM_CLASSES)
     model.load_state_dict(torch.load("models/best_model.pth", weights_only=True))
     model.eval()
 
@@ -117,11 +113,11 @@ def plot_confusion_matrix(cm, save_path):
     """Plot confusion matrix: raw counts and normalized side by side."""
     cm_norm = cm.astype('float') / cm.sum(axis=1)[:, np.newaxis]
 
-    fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(18, 7))
+    fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(20, 8))
 
     sns.heatmap(cm, annot=True, fmt='d', cmap='Blues',
                 xticklabels=CLASSES, yticklabels=CLASSES, ax=ax1,
-                cbar_kws={'label': 'Count'}, annot_kws={"size": 13})
+                cbar_kws={'label': 'Count'}, annot_kws={"size": 11})
     ax1.set_xlabel('Predicted Label', fontsize=12)
     ax1.set_ylabel('True Label', fontsize=12)
     ax1.set_title('Confusion Matrix (Counts)', fontsize=14)
@@ -130,7 +126,7 @@ def plot_confusion_matrix(cm, save_path):
 
     sns.heatmap(cm_norm, annot=True, fmt='.1%', cmap='Blues',
                 xticklabels=CLASSES, yticklabels=CLASSES, ax=ax2,
-                cbar_kws={'label': 'Proportion'}, annot_kws={"size": 13})
+                cbar_kws={'label': 'Proportion'}, annot_kws={"size": 11})
     ax2.set_xlabel('Predicted Label', fontsize=12)
     ax2.set_ylabel('True Label', fontsize=12)
     ax2.set_title('Confusion Matrix (Normalized)', fontsize=14)
@@ -173,7 +169,7 @@ def plot_per_class_accuracy(cm, save_path):
 
 def main():
     print("=" * 65)
-    print("  CG4002 B02 — Step 4: Model Evaluation")
+    print("  CG4002 B02 - Model Evaluation")
     print("=" * 65)
 
     print("\n  Loading model & data...")
@@ -185,7 +181,7 @@ def main():
     cm = compute_confusion_matrix(y_test, y_pred, NUM_CLASSES)
     overall_acc = cm.diagonal().sum() / cm.sum()
 
-    print(f"\n  Overall Accuracy: {overall_acc:.4f} ({overall_acc*100:.1f}%)")
+    print(f"\n  Overall Accuracy: {overall_acc*100:.1f}%")
 
     metrics = compute_metrics(cm)
 
@@ -234,18 +230,15 @@ def main():
         json.dump(results, f, indent=2)
     print(f"  Results saved: models/evaluation_results.json")
 
-    print(f"\n  Evaluation Summary:")
-    print(tabulate([
-        ["Overall Accuracy",  f"{overall_acc*100:.1f}%"],
-        ["Macro Precision",   f"{macro_p:.4f}"],
-        ["Macro Recall",      f"{macro_r:.4f}"],
-        ["Macro F1-Score",    f"{macro_f:.4f}"],
-        ["CPU Inference",     f"{avg_latency_ms:.2f} ms/sample"],
-        ["Test Samples",      total_support],
-        ["Validation Method", "Three-way split (train/val/test)"],
-    ], tablefmt="simple"))
+    print(f"\n  Summary:")
+    print(f"    Overall accuracy:  {overall_acc*100:.1f}%")
+    print(f"    Macro precision:   {macro_p:.4f}")
+    print(f"    Macro recall:      {macro_r:.4f}")
+    print(f"    Macro F1:          {macro_f:.4f}")
+    print(f"    CPU latency:       {avg_latency_ms:.2f} ms/sample")
+    print(f"    Test samples:      {total_support}")
     print()
-    print("  ✓ Step 4 complete!")
+    print("  Done!")
     print("=" * 65)
 
 

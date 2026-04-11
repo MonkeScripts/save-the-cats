@@ -1,31 +1,23 @@
 """
-CG4002 B02 - Step 5a: Vitis AI Quantization (INT8)
-====================================================
-Converts the float32 PyTorch model to INT8 using Vitis AI Quantizer.
-This is required because the DPU on Ultra96 only operates on INT8.
+CG4002 B02 - Vitis AI Quantization (INT8)
+==========================================
+Converts the float32 PyTorch model to INT8 using the Vitis AI Quantizer.
+The DPU on Ultra96 only operates on INT8.
 
-What this does:
-  float32 weights (32 bits per value) → INT8 weights (8 bits per value)
+  float32 weights (32 bits) -> INT8 weights (8 bits)
   - 4x smaller model
   - 4x faster MAC operations on DPU
-  - Slight accuracy loss (typically < 1-2%)
+  - Typically < 1-2% accuracy drop
 
 Prerequisites:
   Must run inside Vitis AI Docker container:
-    $ docker pull xilinx/vitis-ai-pytorch-cpu:latest
-    $ docker run -it -v $(pwd):/workspace xilinx/vitis-ai-pytorch-cpu:latest
-    (inside container)$ conda activate vitis-ai-pytorch
-    (inside container)$ python software/quantize.py
-
-How Vitis AI Quantizer works:
-  1. Takes your trained float32 model
-  2. Runs a "calibration" dataset through the model
-  3. Measures the actual range of activations at each layer
-  4. Maps float32 ranges to INT8 [-128, 127] with minimal loss
-  5. Outputs a quantized model ready for the Vitis AI Compiler
+    docker pull xilinx/vitis-ai-pytorch-cpu:latest
+    docker run -it -v $(pwd):/workspace xilinx/vitis-ai-pytorch-cpu:latest
+    (inside) conda activate vitis-ai-pytorch
+    (inside) python quantize.py
 
 Usage:
-  python software/quantize.py
+  python quantize.py
 """
 
 import os
@@ -33,19 +25,17 @@ import sys
 import textwrap
 import numpy as np
 import torch
-import torch.nn as nn
 
-sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-from model import ExerciseCNN
+sys.path.insert(0, os.path.join(os.path.dirname(__file__)))
+from model import ExerciseCNN, CLASSES
 
-CLASSES = ["high_knees", "pushup", "situp", "lunge", "squat", "overhead_hold", "unknown"]
+NUM_CLASSES = len(CLASSES)
 
 
 def get_calibration_dataloader(num_samples=100, batch_size=1):
     """
-    Load a small subset of training data for calibration.
-    The quantizer needs to see real-ish data to determine
-    the activation ranges at each layer.
+    Load a balanced subset of training data for quantizer calibration.
+    The calibration pass measures activation ranges at each layer.
     """
     X = np.load("data/train/X.npy")
     y = np.load("data/train/y.npy")
@@ -54,10 +44,9 @@ def get_calibration_dataloader(num_samples=100, batch_size=1):
     std  = np.load("models/norm_std.npy")
     X = ((X - mean) / std).astype(np.float32)
 
-    # Take a small balanced subset for calibration
     indices = []
-    per_class = num_samples // len(CLASSES)
-    for cls_idx in range(len(CLASSES)):
+    per_class = num_samples // NUM_CLASSES
+    for cls_idx in range(NUM_CLASSES):
         cls_indices = np.where(y == cls_idx)[0][:per_class]
         indices.extend(cls_indices)
 
@@ -70,17 +59,22 @@ def get_calibration_dataloader(num_samples=100, batch_size=1):
 def quantize_pytorch():
     """
     Quantize using Vitis AI PyTorch Quantizer (vai_q_pytorch).
-    This is the recommended method for PyTorch models.
+    Infers num_features and window_size from the saved checkpoint and data.
     """
     from pytorch_nndct.apis import torch_quantizer
 
     print("  Loading trained float32 model...")
-    model = ExerciseCNN(num_features=12, num_classes=7)
-    model.load_state_dict(torch.load("models/best_model.pth", weights_only=True))
+    checkpoint = torch.load("models/best_model.pth", weights_only=True)
+    num_features = checkpoint['conv1.weight'].shape[1]
+    print(f"    num_features={num_features} (from checkpoint)")
+    model = ExerciseCNN(num_features=num_features, num_classes=NUM_CLASSES)
+    model.load_state_dict(checkpoint)
     model.eval()
 
-    # Dummy input for tracing (must match real input shape)
-    dummy_input = torch.randn(1, 20, 12)
+    # Infer window size from training data shape
+    X_shape = np.load("data/train/X.npy").shape  # (N, window_size, num_features)
+    window_size = X_shape[1]
+    dummy_input = torch.randn(1, window_size, num_features)
 
     print("  Initializing Vitis AI Quantizer...")
     print("    Mode: 'calib' (calibration)")
@@ -115,6 +109,7 @@ def quantize_pytorch():
     print("    → models/quantized/quant_info.json")
 
     print("\n  Running quantized inference test...")
+    dummy_input = torch.randn(1, window_size, num_features)
     quantizer_test = torch_quantizer(
         quant_mode='test',
         module=model,
@@ -186,10 +181,10 @@ def quantize_onnx():
 
 def main():
     print("=" * 65)
-    print("  CG4002 B02 — Step 5a: Vitis AI Quantization (INT8)")
+    print("  CG4002 B02 - Vitis AI Quantization (INT8)")
     print("=" * 65)
     print()
-    print("  Pipeline: float32 (.pth) → INT8 (.xmodel input)")
+    print("  Pipeline: float32 (.pth) -> INT8 (.xmodel)")
     print("  Target:   DPUCZDX8G on Ultra96-V2 (ZU3EG)")
     print()
 

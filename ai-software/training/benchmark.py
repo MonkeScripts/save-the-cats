@@ -1,24 +1,14 @@
 """
-CG4002 B02 - Step 8: Hardware Accelerator Evaluation
-======================================================
-Covers Task 6 demo requirements:
-  - Accuracy comparison: float32 (CPU) vs INT8 (DPU)
-  - Timing: latency & throughput comparison
-  - Resource utilization: BRAM, DSP, LUT, FF usage
-  - Optimization justifications
-
-Two modes:
-  1. On Ultra96 (--hardware): reads real DPU latency and FPGA utilization
-  2. Demo mode (default): simulates everything, runs anywhere
+CG4002 B02 - Hardware Accelerator Evaluation
+=============================================
+  - Accuracy comparison: float32 (CPU) vs simulated INT8 (DPU)
+  - Latency and throughput comparison
+  - FPGA resource utilization (Ultra96-V2 ZU3EG)
+  - Design optimization summary
 
 Usage:
-  cd cg4002-ai-demo
-
-  # Demo mode (laptop, for video recording)
-  python software/benchmark.py
-
-  # Hardware mode (on Ultra96 via SSH)
-  python3 benchmark.py --hardware
+  python benchmark.py              # demo mode (runs on any machine)
+  python3 benchmark.py --hardware  # hardware mode (on Ultra96 via SSH)
 """
 
 import numpy as np
@@ -33,16 +23,17 @@ import matplotlib
 matplotlib.use('Agg')
 import matplotlib.pyplot as plt
 
-sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-from model import ExerciseCNN
-
-CLASSES = ["high_knees", "pushup", "situp", "lunge", "squat", "overhead_hold", "unknown"]
+sys.path.insert(0, os.path.join(os.path.dirname(__file__)))
+from model import ExerciseCNN, CLASSES
 
 
 def load_all():
-    """Load model, test data, normalization params."""
-    model = ExerciseCNN(num_features=12, num_classes=7)
-    model.load_state_dict(torch.load("models/best_model.pth", weights_only=True))
+    """Load model, test data, and normalization params."""
+    # Infer num_features from the saved checkpoint rather than hard-coding
+    checkpoint = torch.load("models/best_model.pth", weights_only=True)
+    num_features = checkpoint['conv1.weight'].shape[1]
+    model = ExerciseCNN(num_features=num_features, num_classes=len(CLASSES))
+    model.load_state_dict(checkpoint)
     model.eval()
 
     X = np.load("data/test/X.npy")
@@ -486,27 +477,17 @@ def main():
     with open("models/benchmark/benchmark_results.json", "w") as f:
         json.dump(results, f, indent=2)
 
-    print("  HARDWARE ACCELERATOR EVALUATION SUMMARY")
-    print("  " + "-" * 58)
-    print(f"  Accuracy (Float32 -> INT8): {acc['float32_accuracy']*100:.1f}% -> {acc['int8_accuracy']*100:.1f}%  (drop: {acc['accuracy_drop']*100:.2f}%)")
+    print(f"\n  Summary:")
+    print(f"    Float32 accuracy:  {acc['float32_accuracy']*100:.1f}%")
+    print(f"    INT8 accuracy:     {acc['int8_accuracy']*100:.1f}%  (drop: {acc['accuracy_drop']*100:.2f}%)")
+    print(f"    CPU latency:       {cpu_lats['cpu_mean_ms']:.3f} ms")
+    print(f"    DPU est. latency:  {dpu_perf['dpu_est_latency_ms']:.3f} ms")
+    print(f"    Speedup:           {speedup:.1f}x")
+    print(f"    Energy ratio:      DPU {dpu_perf['energy_ratio']:.1f}x more efficient")
+    print(f"    FPGA LUT/BRAM/DSP: {util['LUT']['percent']:.1f}% / {util['BRAM']['percent']:.1f}% / {util['DSP']['percent']:.1f}%")
+    print(f"    Optimizations:     {len(OPTIMIZATIONS)} applied")
     print()
-    print("  Latency:")
-    print(f"    CPU (PyTorch):   {cpu_lats['cpu_mean_ms']:>7.3f} ms")
-    print(f"    DPU (estimated): {dpu_perf['dpu_est_latency_ms']:>7.3f} ms")
-    print(f"    Speedup:         {speedup:>7.1f}x")
-    print()
-    print(f"  Energy: DPU is {dpu_perf['energy_ratio']:.1f}x more efficient per inference")
-    print()
-    print("  FPGA Resources:")
-    print(f"    LUT:  {util['LUT']['percent']:>5.1f}%  BRAM: {util['BRAM']['percent']:>5.1f}%  DSP: {util['DSP']['percent']:>5.1f}%")
-    print("    All within 80% threshold")
-    print()
-    print(f"  Optimizations: {len(OPTIMIZATIONS)} applied")
-    print("    INT8 quantization, BN fusion, GAP, ArgMax,")
-    print("    ReLU activation, Conv1D->Conv2D mapping")
-    print("  " + "-" * 58)
-
-    print("  ✓ Step 8 complete!")
+    print("  Done!")
     print("=" * 65)
 
 
