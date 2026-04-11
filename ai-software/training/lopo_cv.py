@@ -1,476 +1,482 @@
 """
-CG4002 B02 - Leave-One-Person-Out (LOPO) Cross-Validation
+CG4002 B02 - LOPO Cross-Validation on Previous (v1) Data
 ==========================================================
-Trains 4 folds, each time holding out one person's data entirely.
-Tests whether the model generalizes to unseen users, not just unseen windows.
+Leave-One-Person-Out evaluation on data/Real_Training_Data/Previous.
+  - 5 people, 7 classes
+  - 3 sensors (arm, chest, thigh), 4 features each (avm, ax, ay, az) = 12 raw features
+  - Original rate ~8 Hz, resampled to uniform 8 Hz via interpolation
 
 Usage:
-  python lopo_cv.py
+  python lopo_previous.py
 """
 
+import json
+import re
+import os
+import sys
+import numpy as np
 import torch
 import torch.nn as nn
 import torch.optim as optim
 from torch.utils.data import DataLoader, TensorDataset
-import numpy as np
-import os
-import sys
-import json
-import time
 from collections import defaultdict
 
 import matplotlib
 matplotlib.use('Agg')
 import matplotlib.pyplot as plt
+import seaborn as sns
 
-_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-sys.path.insert(0, _root)
-sys.path.insert(0, os.path.join(_root, 'data_pipeline'))
+sys.path.insert(0, os.path.dirname(__file__))
+from model import ExerciseCNN, CLASSES
+from features import augment_data, NUM_FEATURES
 
-from model import ExerciseCNN
-from convert_real_data import (
-    CLASSES, NUM_FEATURES, WINDOW_SIZE, STRIDE, SENSOR_ORDER,
-    FILENAME_TO_CLASS, DATA_DIR,
-    parse_influxdb_csv, align_sensors, segment_windows,
-)
+# ---------------------------------------------------------------------------
+# Constants
+# ---------------------------------------------------------------------------
 
+PREV_DATA_DIR = "data/Real_Training_Data/Previous"
 
-CONFIG = {
-    "num_features": NUM_FEATURES,
-    "num_classes": len(CLASSES),
-    "window_size": WINDOW_SIZE,
-    "batch_size": 32,
-    "learning_rate": 0.001,
-    "weight_decay": 1e-4,
-    "epochs": 50,
+SENSOR_ORDER      = ["arm", "chest", "thigh"]
+FEATURES_PER_SENSOR = ["avm", "ax", "ay", "az"]
+
+SAMPLE_RATE = 8
+WINDOW_SIZE = 20
+STRIDE      = 5
+
+NUM_CLASSES = len(CLASSES)
+
+# Filename -> class mapping for all 5 people in the Previous folder
+FILENAME_TO_CLASS = {
+    # first person
+    "high-knee, 30s.csv":            "high_knees",
+    "lunges, 30s.csv":               "lunge",
+    "squats, 30s.csv":               "squat",
+    "overhead_arm, 30s.csv":         "overhead_arm",
+    "push-up, 30s.csv":              "push_up",
+    "sit-up, 30s.csv":               "sit_up",
+    "control-stationary, 30s.csv":   "unknown",
+    # second person
+    "v2high-knee, 30s.csv":          "high_knees",
+    "v2lunges, 30s.csv":             "lunge",
+    "v2squat, 30s.csv":              "squat",
+    "v2overhead_arm, 30s.csv":       "overhead_arm",
+    "v2push-up, 30s.csv":            "push_up",
+    "v2sit-up, 30s.csv":             "sit_up",
+    # third person
+    "v3high-knee.csv":               "high_knees",
+    "v3lunges.csv":                  "lunge",
+    "v3squats.csv":                  "squat",
+    "v3overhead_hold.csv":           "overhead_arm",
+    "v3pushup.csv":                  "push_up",
+    "v3situp.csv":                   "sit_up",
+    "v3control.csv":                 "unknown",
+    # fourth person
+    "v4high-knee.csv":               "high_knees",
+    "v4lunges.csv":                  "lunge",
+    "v4squats.csv":                  "squat",
+    "v4overhead-hold.csv":           "overhead_arm",
+    "v4pushup.csv":                  "push_up",
+    "v4sit-up.csv":                  "sit_up",
+    "v4control.csv":                 "unknown",
+    # fifth person
+    "v5highknee.csv":                "high_knees",
+    "v5lunges.csv":                  "lunge",
+    "v5squat.csv":                   "squat",
+    "v5armhold.csv":                 "overhead_arm",
+    "v5pushup.csv":                  "push_up",
+    "v5situp.csv":                   "sit_up",
+    "v5control.csv":                 "unknown",
 }
 
-PERSON_DIRS = ["first person", "second person", "third person", "fourth person", "fifth person"]
-
-# Augmentation multiplier: how many augmented copies per original sample
-AUG_COPIES = 4
-
-
-def augment_scaling(X, scale_range=(0.8, 1.2)):
-    """Random per-channel amplitude scaling."""
-    scales = np.random.uniform(scale_range[0], scale_range[1], size=(1, X.shape[-1]))
-    return X * scales
+EPOCHS       = 50
+BATCH_SIZE   = 32
+LR           = 0.001
+WEIGHT_DECAY = 1e-4
+VAL_RATIO    = 0.15
 
 
-def augment_noise(X, noise_std=0.05):
-    """Add Gaussian noise."""
-    return X + np.random.normal(0, noise_std, X.shape)
+# ---------------------------------------------------------------------------
+# Parsing
+# ---------------------------------------------------------------------------
 
-
-def augment_time_warp(X, sigma=0.2):
+def parse_previous_csv(filepath):
     """
-    Smooth time warping: generate a random cumulative warp path
-    and resample the signal along it using linear interpolation.
+    Parse an InfluxDB annotated CSV from the Previous folder.
+    Extracts avm, ax, ay, az per sensor (no gyroscope).
     """
-    T = X.shape[0]
-    # Random warp: cumulative sum of 1 + small perturbations
-    warp = np.cumsum(np.random.normal(1.0, sigma, T))
-    # Normalize to [0, T-1]
-    warp = (warp - warp[0]) / (warp[-1] - warp[0]) * (T - 1)
-    orig_indices = np.arange(T)
-    warped = np.zeros_like(X)
-    for ch in range(X.shape[-1]):
-        warped[:, ch] = np.interp(orig_indices, warp, X[:, ch])
-    return warped
+    sensor_data = {s: [] for s in SENSOR_ORDER}
+
+    with open(filepath, encoding="utf-8", errors="ignore") as f:
+        lines = f.readlines()
+
+    for line in lines:
+        if '"ax"' not in line:
+            continue
+
+        sensor = None
+        for s in SENSOR_ORDER:
+            if f"esp/{s}" in line:
+                sensor = s
+                break
+        if sensor is None:
+            continue
+
+        js = re.search(r'"(\{.*?\})"', line)
+        if not js:
+            continue
+
+        raw = js.group(1).replace('""', '"')
+        try:
+            payload = json.loads(raw)
+            sensor_data[sensor].append({
+                "t_ms": int(payload["t_ms"]),
+                "avm":  float(payload["avm"]),
+                "ax":   float(payload["ax"]),
+                "ay":   float(payload["ay"]),
+                "az":   float(payload["az"]),
+            })
+        except (json.JSONDecodeError, KeyError, ValueError):
+            continue
+
+    return sensor_data
 
 
-def augment_rotation(X, num_sensors=3, features_per_sensor=4):
-    """
-    Apply a small random 3D rotation to each sensor's (ax, ay, az).
-    avm is recomputed from the rotated axes.
-    """
-    X_aug = X.copy()
-    for s in range(num_sensors):
-        offset = s * features_per_sensor
-        ax, ay, az = X[:, offset], X[:, offset+1], X[:, offset+2]
+def upsample_sensor(readings, target_hz=SAMPLE_RATE):
+    """Resample sensor readings to a uniform target rate via linear interpolation."""
+    if len(readings) < 2:
+        return readings
 
-        # Small random rotation angles (radians)
-        angles = np.random.uniform(-0.3, 0.3, 3)
-        cx, sx = np.cos(angles[0]), np.sin(angles[0])
-        cy, sy = np.cos(angles[1]), np.sin(angles[1])
-        cz, sz = np.cos(angles[2]), np.sin(angles[2])
+    readings = sorted(readings, key=lambda r: r["t_ms"])
+    t_orig = np.array([r["t_ms"] for r in readings], dtype=np.float64)
+    t_new  = np.arange(t_orig[0], t_orig[-1], 1000.0 / target_hz)
 
-        # Combined rotation matrix (Rz * Ry * Rx)
-        R = np.array([
-            [cy*cz, sx*sy*cz - cx*sz, cx*sy*cz + sx*sz],
-            [cy*sz, sx*sy*sz + cx*cz, cx*sy*sz - sx*cz],
-            [-sy,   sx*cy,            cx*cy           ],
-        ])
+    result = []
+    for field in FEATURES_PER_SENSOR:
+        vals = np.array([r[field] for r in readings], dtype=np.float64)
+        result.append(np.interp(t_new, t_orig, vals))
 
-        accel = np.stack([ax, ay, az], axis=1)  # (T, 3)
-        rotated = accel @ R.T  # (T, 3)
-
-        X_aug[:, offset]   = rotated[:, 0]
-        X_aug[:, offset+1] = rotated[:, 1]
-        X_aug[:, offset+2] = rotated[:, 2]
-        # Recompute avm
-        X_aug[:, offset+3] = np.sqrt(rotated[:, 0]**2 + rotated[:, 1]**2 + rotated[:, 2]**2)
-
-    return X_aug
+    return [
+        {"t_ms": float(t_new[i]), **{f: float(result[j][i]) for j, f in enumerate(FEATURES_PER_SENSOR)}}
+        for i in range(len(t_new))
+    ]
 
 
-def augment_time_shift(X, max_shift=3):
-    """Circular time shift."""
-    shift = np.random.randint(-max_shift, max_shift + 1)
-    return np.roll(X, shift, axis=0)
+def align_and_window(sensor_data):
+    """Align sensors by t_ms and segment into (N, WINDOW_SIZE, 12) windows."""
+    arm   = sorted(sensor_data["arm"],   key=lambda r: r["t_ms"])
+    chest = sorted(sensor_data["chest"], key=lambda r: r["t_ms"])
+    thigh = sorted(sensor_data["thigh"], key=lambda r: r["t_ms"])
+
+    if not arm or not chest or not thigh:
+        return np.array([], dtype=np.float32).reshape(0, WINDOW_SIZE, NUM_FEATURES)
+
+    chest_t = np.array([r["t_ms"] for r in chest])
+    thigh_t = np.array([r["t_ms"] for r in thigh])
+
+    aligned = []
+    for a in arm:
+        t  = a["t_ms"]
+        ci = int(np.argmin(np.abs(chest_t - t)))
+        ti = int(np.argmin(np.abs(thigh_t - t)))
+        c, th = chest[ci], thigh[ti]
+        row = [a[f] for f in FEATURES_PER_SENSOR] + \
+              [c[f] for f in FEATURES_PER_SENSOR] + \
+              [th[f] for f in FEATURES_PER_SENSOR]
+        aligned.append(row)
+
+    aligned = np.array(aligned, dtype=np.float32)
+    if len(aligned) < WINDOW_SIZE:
+        return np.array([], dtype=np.float32).reshape(0, WINDOW_SIZE, NUM_FEATURES)
+
+    windows = []
+    for start in range(0, len(aligned) - WINDOW_SIZE + 1, STRIDE):
+        windows.append(aligned[start:start + WINDOW_SIZE])
+
+    return np.array(windows, dtype=np.float32)
 
 
-def augment_sample(X):
-    """Apply a random combination of augmentations to one window."""
-    X_aug = X.copy()
+# ---------------------------------------------------------------------------
+# Data loading
+# ---------------------------------------------------------------------------
 
-    # Always apply scaling + noise (mild, always helpful)
-    X_aug = augment_scaling(X_aug)
-    X_aug = augment_noise(X_aug)
-
-    # Randomly apply stronger augmentations
-    if np.random.random() < 0.5:
-        X_aug = augment_time_warp(X_aug)
-    if np.random.random() < 0.5:
-        X_aug = augment_rotation(X_aug)
-    if np.random.random() < 0.5:
-        X_aug = augment_time_shift(X_aug)
-
-    return X_aug.astype(np.float32)
-
-
-def augment_dataset(X, y, num_copies=AUG_COPIES):
-    """Create augmented copies of the entire training set."""
-    X_aug_list = [X]  # keep originals
-    y_aug_list = [y]
-
-    for _ in range(num_copies):
-        X_copy = np.array([augment_sample(x) for x in X])
-        X_aug_list.append(X_copy)
-        y_aug_list.append(y.copy())
-
-    return np.concatenate(X_aug_list, axis=0), np.concatenate(y_aug_list, axis=0)
-
-
-def load_all_by_person():
-    """Load and segment all real data, grouped by person directory."""
-    person_data = {}  # person_dir -> (X, y)
-
-    for person_dir in sorted(os.listdir(DATA_DIR)):
-        person_path = os.path.join(DATA_DIR, person_dir)
-        if not os.path.isdir(person_path) or person_dir.startswith("."):
+def load_all_persons():
+    persons = {}
+    for person_dir in sorted(os.listdir(PREV_DATA_DIR)):
+        person_path = os.path.join(PREV_DATA_DIR, person_dir)
+        if not os.path.isdir(person_path):
             continue
 
         X_list, y_list = [], []
-
         for fname in sorted(os.listdir(person_path)):
             if not fname.endswith(".csv"):
                 continue
-
             class_name = FILENAME_TO_CLASS.get(fname)
             if class_name is None:
-                print(f"  WARNING: No class mapping for {fname}, skipping")
+                print(f"  WARNING: No mapping for {person_dir}/{fname}, skipping")
                 continue
-
             class_idx = CLASSES.index(class_name)
             fpath = os.path.join(person_path, fname)
 
-            sensor_data = parse_influxdb_csv(fpath)
-            aligned = align_sensors(sensor_data)
-            if not aligned:
+            sensor_data = parse_previous_csv(fpath)
+            if any(len(sensor_data[s]) < 10 for s in SENSOR_ORDER):
+                print(f"  SKIP {person_dir}/{fname}: insufficient data")
                 continue
 
-            windows = segment_windows(aligned)
+            for s in SENSOR_ORDER:
+                sensor_data[s] = upsample_sensor(sensor_data[s])
+
+            windows = align_and_window(sensor_data)
             if len(windows) == 0:
+                print(f"  SKIP {person_dir}/{fname}: not enough samples")
                 continue
 
             X_list.append(windows)
             y_list.append(np.full(len(windows), class_idx, dtype=np.int64))
+            print(f"  {person_dir:15s} / {fname:35s} -> {class_name:14s}  {len(windows)} windows")
 
         if X_list:
-            person_data[person_dir] = (
-                np.concatenate(X_list, axis=0),
-                np.concatenate(y_list, axis=0),
-            )
-            print(f"  {person_dir:15s}: {len(person_data[person_dir][0]):4d} windows")
+            persons[person_dir] = {
+                "X": np.concatenate(X_list, axis=0),
+                "y": np.concatenate(y_list, axis=0),
+            }
+            print(f"  --> {person_dir}: {persons[person_dir]['X'].shape[0]} windows total\n")
 
-    return person_data
+    return persons
 
 
-def normalize_split(X_tr, X_te):
-    """Z-score normalize using training stats only."""
+# ---------------------------------------------------------------------------
+# Training helpers
+# ---------------------------------------------------------------------------
+
+def normalize_fit(X_tr):
     flat = X_tr.reshape(-1, X_tr.shape[-1])
-    mean = flat.mean(axis=0)
-    std = flat.std(axis=0)
+    mean = flat.mean(axis=0).astype(np.float32)
+    std  = flat.std(axis=0).astype(np.float32)
     std[std < 1e-8] = 1.0
-    return (X_tr - mean) / std, (X_te - mean) / std
+    return mean, std
 
 
-def train_fold(X_tr, y_tr, X_te, y_te, fold_name, epochs=CONFIG["epochs"]):
-    """Train one LOPO fold and return test metrics."""
-    X_tr, y_tr = augment_dataset(X_tr, y_tr)
-    print(f"    After augmentation: {len(X_tr)} training windows ({AUG_COPIES}x copies + originals)")
-
-    X_tr, X_te = normalize_split(X_tr, X_te)
-
-    train_ds = TensorDataset(
-        torch.from_numpy(X_tr.astype(np.float32)),
-        torch.from_numpy(y_tr),
-    )
-    test_ds = TensorDataset(
-        torch.from_numpy(X_te.astype(np.float32)),
-        torch.from_numpy(y_te),
-    )
-    train_loader = DataLoader(train_ds, batch_size=CONFIG["batch_size"], shuffle=True)
-    test_loader = DataLoader(test_ds, batch_size=CONFIG["batch_size"], shuffle=False)
-
-    model = ExerciseCNN(num_features=CONFIG["num_features"], num_classes=CONFIG["num_classes"])
+def train_model(X_tr, y_tr, X_va, y_va, num_features):
+    model     = ExerciseCNN(num_features=num_features, num_classes=NUM_CLASSES)
     criterion = nn.CrossEntropyLoss()
-    optimizer = optim.Adam(model.parameters(), lr=CONFIG["learning_rate"],
-                           weight_decay=CONFIG["weight_decay"])
+    optimizer = optim.Adam(model.parameters(), lr=LR, weight_decay=WEIGHT_DECAY)
     scheduler = optim.lr_scheduler.StepLR(optimizer, step_size=20, gamma=0.5)
 
-    best_acc = 0.0
-    history = {"train_loss": [], "train_acc": [], "test_loss": [], "test_acc": []}
+    train_loader = DataLoader(
+        TensorDataset(torch.from_numpy(X_tr), torch.from_numpy(y_tr)),
+        batch_size=BATCH_SIZE, shuffle=True
+    )
+    val_loader = DataLoader(
+        TensorDataset(torch.from_numpy(X_va), torch.from_numpy(y_va)),
+        batch_size=BATCH_SIZE, shuffle=False
+    )
 
-    for epoch in range(1, epochs + 1):
-        # Train
+    best_val_acc = 0.0
+    best_state   = None
+
+    for epoch in range(1, EPOCHS + 1):
         model.train()
-        total_loss, correct, total = 0.0, 0, 0
-        for X_batch, y_batch in train_loader:
+        for Xb, yb in train_loader:
             optimizer.zero_grad()
-            outputs = model(X_batch)
-            loss = criterion(outputs, y_batch)
+            loss = criterion(model(Xb), yb)
             loss.backward()
             optimizer.step()
-            total_loss += loss.item() * X_batch.size(0)
-            correct += (outputs.argmax(dim=1) == y_batch).sum().item()
-            total += y_batch.size(0)
-        tr_loss, tr_acc = total_loss / total, correct / total
-
-        # Evaluate
-        model.eval()
-        total_loss, correct, total = 0.0, 0, 0
-        all_preds, all_labels = [], []
-        with torch.no_grad():
-            for X_batch, y_batch in test_loader:
-                outputs = model(X_batch)
-                loss = criterion(outputs, y_batch)
-                total_loss += loss.item() * X_batch.size(0)
-                preds = outputs.argmax(dim=1)
-                correct += (preds == y_batch).sum().item()
-                total += y_batch.size(0)
-                all_preds.extend(preds.numpy())
-                all_labels.extend(y_batch.numpy())
-        te_loss, te_acc = total_loss / total, correct / total
-
         scheduler.step()
 
-        history["train_loss"].append(tr_loss)
-        history["train_acc"].append(tr_acc)
-        history["test_loss"].append(te_loss)
-        history["test_acc"].append(te_acc)
+        model.eval()
+        correct = total = 0
+        with torch.no_grad():
+            for Xb, yb in val_loader:
+                preds    = model(Xb).argmax(dim=1)
+                correct += (preds == yb).sum().item()
+                total   += yb.size(0)
+        val_acc = correct / total
 
-        if te_acc > best_acc:
-            best_acc = te_acc
-            best_preds = np.array(all_preds)
-            best_labels = np.array(all_labels)
+        if val_acc > best_val_acc:
+            best_val_acc = val_acc
+            best_state   = {k: v.clone() for k, v in model.state_dict().items()}
 
-        if epoch == 1 or epoch % 10 == 0 or epoch == epochs:
-            print(f"    Epoch {epoch:3d}  "
-                  f"train_loss={tr_loss:.4f}  train_acc={tr_acc:.4f}  "
-                  f"test_loss={te_loss:.4f}  test_acc={te_acc:.4f}")
-
-    return best_acc, best_preds, best_labels, history
+    model.load_state_dict(best_state)
+    return model, best_val_acc
 
 
-def compute_confusion_matrix(y_true, y_pred, num_classes):
-    cm = np.zeros((num_classes, num_classes), dtype=int)
+def predict(model, X):
+    model.eval()
+    with torch.no_grad():
+        logits = model(torch.from_numpy(X))
+    return logits.argmax(dim=1).numpy()
+
+
+def compute_confusion_matrix(y_true, y_pred):
+    cm = np.zeros((NUM_CLASSES, NUM_CLASSES), dtype=np.int32)
     for t, p in zip(y_true, y_pred):
-        cm[t][p] += 1
+        cm[t, p] += 1
     return cm
 
 
-def plot_lopo_results(fold_results, save_dir):
-    """Plot per-fold training curves and confusion matrices."""
-    os.makedirs(save_dir, exist_ok=True)
-    num_folds = len(fold_results)
-    num_classes = len(CLASSES)
+def compute_metrics(cm):
+    metrics = {}
+    for i in range(NUM_CLASSES):
+        tp = cm[i, i]
+        fp = cm[:, i].sum() - tp
+        fn = cm[i, :].sum() - tp
+        p  = tp / (tp + fp) if (tp + fp) > 0 else 0.0
+        r  = tp / (tp + fn) if (tp + fn) > 0 else 0.0
+        f1 = 2 * p * r / (p + r) if (p + r) > 0 else 0.0
+        metrics[i] = {"precision": p, "recall": r, "f1": f1, "support": int(cm[i].sum())}
+    return metrics
 
-    fig, axes = plt.subplots(2, num_folds, figsize=(5 * num_folds, 8))
-    for i, (person, result) in enumerate(fold_results.items()):
-        h = result["history"]
-        epochs = range(1, len(h["train_loss"]) + 1)
 
-        ax_loss = axes[0][i] if num_folds > 1 else axes[0]
-        ax_loss.plot(epochs, h["train_loss"], 'b-', label='Train')
-        ax_loss.plot(epochs, h["test_loss"], 'r-', label='Test')
-        ax_loss.set_title(f'Loss (held out: {person})', fontsize=10)
-        ax_loss.set_xlabel('Epoch')
-        ax_loss.set_ylabel('Loss')
-        ax_loss.legend(fontsize=8)
-        ax_loss.grid(True, alpha=0.3)
-
-        ax_acc = axes[1][i] if num_folds > 1 else axes[1]
-        ax_acc.plot(epochs, h["train_acc"], 'b-', label='Train')
-        ax_acc.plot(epochs, h["test_acc"], 'r-', label='Test')
-        ax_acc.set_title(f'Acc (held out: {person})', fontsize=10)
-        ax_acc.set_xlabel('Epoch')
-        ax_acc.set_ylabel('Accuracy')
-        ax_acc.legend(fontsize=8)
-        ax_acc.grid(True, alpha=0.3)
-        ax_acc.set_ylim([0, 1.05])
-
+def plot_confusion_matrix(cm, title, save_path):
+    cm_norm = cm.astype(float) / cm.sum(axis=1, keepdims=True).clip(min=1)
+    fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(20, 8))
+    short = [c[:12] for c in CLASSES]
+    sns.heatmap(cm,      annot=True, fmt='d',    cmap='Blues',
+                xticklabels=short, yticklabels=short, ax=ax1)
+    sns.heatmap(cm_norm, annot=True, fmt='.1%',  cmap='Blues',
+                xticklabels=short, yticklabels=short, ax=ax2)
+    for ax, t in zip([ax1, ax2], ['Counts', 'Normalized']):
+        ax.set_xlabel('Predicted')
+        ax.set_ylabel('True')
+        ax.set_title(f'{title} ({t})')
+        ax.tick_params(axis='x', rotation=30)
     plt.tight_layout()
-    plt.savefig(os.path.join(save_dir, "lopo_training_curves.png"), dpi=150, bbox_inches='tight')
+    plt.savefig(save_path, dpi=150, bbox_inches='tight')
     plt.close()
 
-    fig, axes = plt.subplots(1, num_folds, figsize=(5 * num_folds, 5))
-    for i, (person, result) in enumerate(fold_results.items()):
-        ax = axes[i] if num_folds > 1 else axes
-        cm = result["confusion_matrix"]
-        cm_norm = cm.astype(float)
-        row_sums = cm_norm.sum(axis=1, keepdims=True)
-        row_sums[row_sums == 0] = 1
-        cm_norm = cm_norm / row_sums
 
-        im = ax.imshow(cm_norm, interpolation='nearest', cmap='Blues', vmin=0, vmax=1)
-        ax.set_title(f'Held out: {person}\nAcc: {result["accuracy"]:.1%}', fontsize=10)
-        ax.set_xticks(range(num_classes))
-        ax.set_yticks(range(num_classes))
-        short_labels = [c[:6] for c in CLASSES]
-        ax.set_xticklabels(short_labels, rotation=45, ha='right', fontsize=7)
-        ax.set_yticklabels(short_labels, fontsize=7)
-
-        for r in range(num_classes):
-            for c_idx in range(num_classes):
-                val = cm_norm[r, c_idx]
-                color = 'white' if val > 0.5 else 'black'
-                ax.text(c_idx, r, f'{val:.0%}', ha='center', va='center',
-                        fontsize=7, color=color)
-
-    plt.tight_layout()
-    plt.savefig(os.path.join(save_dir, "lopo_confusion_matrices.png"), dpi=150, bbox_inches='tight')
-    plt.close()
-
-    fig, ax = plt.subplots(figsize=(8, 5))
-    persons = list(fold_results.keys())
-    accs = [fold_results[p]["accuracy"] for p in persons]
-    bars = ax.bar(range(len(persons)), accs, color=['#4C72B0', '#DD8452', '#55A868', '#C44E52'])
-    ax.set_xticks(range(len(persons)))
-    ax.set_xticklabels(persons, fontsize=9)
-    ax.set_ylabel('Test Accuracy')
-    ax.set_title(f'LOPO Cross-Validation (Mean: {np.mean(accs):.1%}, Std: {np.std(accs):.1%})')
-    ax.set_ylim([0, 1.05])
-    ax.axhline(y=np.mean(accs), color='gray', linestyle='--', alpha=0.7, label=f'Mean: {np.mean(accs):.1%}')
-    ax.legend()
-    for bar, acc in zip(bars, accs):
-        ax.text(bar.get_x() + bar.get_width() / 2, bar.get_height() + 0.01,
-                f'{acc:.1%}', ha='center', fontsize=10)
-    ax.grid(True, alpha=0.3, axis='y')
-    plt.tight_layout()
-    plt.savefig(os.path.join(save_dir, "lopo_summary.png"), dpi=150, bbox_inches='tight')
-    plt.close()
-
-    print(f"\n  Plots saved to {save_dir}/")
-
+# ---------------------------------------------------------------------------
+# Main LOPO loop
+# ---------------------------------------------------------------------------
 
 def main():
     print("=" * 65)
-    print("  CG4002 B02 - Leave-One-Person-Out Cross-Validation")
+    print("  CG4002 B02 - LOPO on Previous (v1) Data")
     print("=" * 65)
+    print(f"  Data:    {PREV_DATA_DIR}")
+    print(f"  Classes: {CLASSES}")
+    print()
 
-    print("\n  Loading data by person...")
-    person_data = load_all_by_person()
+    print("  Loading all person data...")
+    persons = load_all_persons()
+    person_list = sorted(persons.keys())
+    n_persons   = len(person_list)
+    print(f"\n  {n_persons} people: {person_list}\n")
 
-    persons = sorted(person_data.keys())
-    print(f"\n  {len(persons)} people found: {persons}")
+    fold_results = []
+    cm_aggregate = np.zeros((NUM_CLASSES, NUM_CLASSES), dtype=np.int32)
 
-    fold_results = {}
-    all_preds = []
-    all_labels = []
+    for fold_idx, test_person in enumerate(person_list):
+        print(f"\n{'='*65}")
+        print(f"  Fold {fold_idx+1}/{n_persons} - held out: {test_person}")
+        print(f"{'='*65}")
 
-    for fold_idx, held_out in enumerate(persons):
-        print(f"\n  {'='*55}")
-        print(f"  Fold {fold_idx+1}/{len(persons)}: Held out = {held_out}")
-        print(f"  {'='*55}")
+        X_train_raw = np.concatenate(
+            [persons[p]["X"] for p in person_list if p != test_person], axis=0
+        )
+        y_train = np.concatenate(
+            [persons[p]["y"] for p in person_list if p != test_person], axis=0
+        )
+        X_test_raw = persons[test_person]["X"]
+        y_test     = persons[test_person]["y"]
 
-        X_te, y_te = person_data[held_out]
-        X_tr_parts, y_tr_parts = [], []
-        for p in persons:
-            if p != held_out:
-                X_tr_parts.append(person_data[p][0])
-                y_tr_parts.append(person_data[p][1])
+        mean, std = normalize_fit(X_train_raw)
+        X_train_norm = ((X_train_raw - mean) / std).astype(np.float32)
+        X_test_norm  = ((X_test_raw  - mean) / std).astype(np.float32)
 
-        X_tr = np.concatenate(X_tr_parts, axis=0)
-        y_tr = np.concatenate(y_tr_parts, axis=0)
+        np.random.seed(42)
+        perm = np.random.permutation(len(X_train_norm))
+        X_train_norm, y_train = X_train_norm[perm], y_train[perm]
+        n_val = int(len(X_train_norm) * VAL_RATIO)
+        X_va, y_va = X_train_norm[:n_val],  y_train[:n_val]
+        X_tr, y_tr = X_train_norm[n_val:],  y_train[n_val:]
 
-        print(f"    Train: {len(X_tr)} windows from {len(persons)-1} people")
-        print(f"    Test:  {len(X_te)} windows from {held_out}")
+        print(f"  Train: {len(X_tr)}  Val: {len(X_va)}  Test: {len(X_test_norm)}")
+        print(f"  Training ({EPOCHS} epochs)...")
 
-        test_classes = {CLASSES[i]: int(np.sum(y_te == i)) for i in range(len(CLASSES)) if np.sum(y_te == i) > 0}
-        print(f"    Test classes: {test_classes}")
+        model, best_val_acc = train_model(X_tr, y_tr, X_va, y_va, num_features=X_tr.shape[-1])
+        print(f"  Best val acc: {best_val_acc*100:.1f}%")
 
-        best_acc, preds, labels, history = train_fold(X_tr, y_tr, X_te, y_te, held_out)
-        cm = compute_confusion_matrix(labels, preds, len(CLASSES))
+        y_pred = predict(model, X_test_norm)
+        cm     = compute_confusion_matrix(y_test, y_pred)
+        cm_aggregate += cm
 
-        fold_results[held_out] = {
-            "accuracy": best_acc,
-            "confusion_matrix": cm,
-            "history": history,
-        }
-        all_preds.extend(preds)
-        all_labels.extend(labels)
+        acc      = cm.diagonal().sum() / cm.sum()
+        mets     = compute_metrics(cm)
+        macro_f1 = np.mean([mets[i]["f1"] for i in range(NUM_CLASSES)])
 
-        print(f"    Best test accuracy: {best_acc:.1%}")
+        print(f"\n  Test accuracy: {acc*100:.1f}%  macro-F1: {macro_f1:.3f}")
+        print(f"  {'Class':<18} {'Prec':>6} {'Recall':>7} {'F1':>6} {'Supp':>5}")
+        print("  " + "-" * 46)
+        for i in range(NUM_CLASSES):
+            m = mets[i]
+            print(f"  {CLASSES[i]:<18} {m['precision']:>6.3f} {m['recall']:>7.3f} "
+                  f"{m['f1']:>6.3f} {m['support']:>5d}")
 
-        for i, cls in enumerate(CLASSES):
-            mask = labels == i
-            if mask.sum() > 0:
-                cls_acc = (preds[mask] == i).mean()
-                print(f"      {cls:15s}: {cls_acc:.1%} ({mask.sum()} samples)")
+        os.makedirs("models/lopo_previous", exist_ok=True)
+        plot_confusion_matrix(
+            cm,
+            title=f"Fold {fold_idx+1} - held out: {test_person}",
+            save_path=f"models/lopo_previous/confusion_fold{fold_idx+1}.png"
+        )
 
-    print(f"\n  {'='*55}")
-    print(f"  LOPO CROSS-VALIDATION SUMMARY")
-    print(f"  {'='*55}")
+        fold_results.append({
+            "fold": fold_idx + 1,
+            "test_person": test_person,
+            "accuracy": float(acc),
+            "macro_f1": float(macro_f1),
+            "per_class": {CLASSES[i]: mets[i] for i in range(NUM_CLASSES)},
+        })
 
-    accs = [fold_results[p]["accuracy"] for p in persons]
-    for p in persons:
-        print(f"    {p:15s}: {fold_results[p]['accuracy']:.1%}")
-    print(f"    {'─'*30}")
-    print(f"    {'Mean':15s}: {np.mean(accs):.1%}")
-    print(f"    {'Std':15s}: {np.std(accs):.1%}")
-    print(f"    {'Min':15s}: {np.min(accs):.1%}")
-    print(f"    {'Max':15s}: {np.max(accs):.1%}")
+    # Aggregate results
+    print(f"\n{'='*65}")
+    print(f"  LOPO SUMMARY - Previous (v1) Data  [{n_persons} folds]")
+    print(f"{'='*65}")
 
-    overall_cm = compute_confusion_matrix(np.array(all_labels), np.array(all_preds), len(CLASSES))
-    overall_correct = sum(overall_cm[i][i] for i in range(len(CLASSES)))
-    overall_total = overall_cm.sum()
-    print(f"\n    Overall accuracy (all folds): {overall_correct/overall_total:.1%}")
+    accs = [r["accuracy"]  for r in fold_results]
+    f1s  = [r["macro_f1"]  for r in fold_results]
 
-    save_dir = "models/lopo"
-    os.makedirs(save_dir, exist_ok=True)
+    print(f"  {'Held-out person':<20} {'Accuracy':>10} {'Macro-F1':>10}")
+    print("  " + "-" * 44)
+    for r in fold_results:
+        print(f"  {r['test_person']:<20} {r['accuracy']*100:>9.1f}% {r['macro_f1']:>10.3f}")
+    print("  " + "-" * 44)
+    print(f"  {'MEAN +/- STD':<20} "
+          f"{np.mean(accs)*100:>8.1f}% +/- {np.std(accs)*100:.1f}%  "
+          f"{np.mean(f1s):>6.3f} +/- {np.std(f1s):.3f}")
 
-    results = {
-        "method": "Leave-One-Person-Out Cross-Validation",
-        "folds": {},
-        "mean_accuracy": float(np.mean(accs)),
-        "std_accuracy": float(np.std(accs)),
-        "overall_accuracy": float(overall_correct / overall_total),
-        "overall_confusion_matrix": overall_cm.tolist(),
-    }
-    for p in persons:
-        results["folds"][p] = {
-            "accuracy": fold_results[p]["accuracy"],
-            "confusion_matrix": fold_results[p]["confusion_matrix"].tolist(),
-        }
+    plot_confusion_matrix(
+        cm_aggregate,
+        title="LOPO Aggregate - Previous (v1) data",
+        save_path="models/lopo_previous/confusion_aggregate.png"
+    )
 
-    with open(os.path.join(save_dir, "lopo_results.json"), "w") as f:
-        json.dump(results, f, indent=2)
+    agg_acc  = cm_aggregate.diagonal().sum() / cm_aggregate.sum()
+    agg_mets = compute_metrics(cm_aggregate)
+    agg_f1   = np.mean([agg_mets[i]["f1"] for i in range(NUM_CLASSES)])
 
-    plot_lopo_results(fold_results, save_dir)
+    print(f"\n  Aggregate accuracy: {agg_acc*100:.1f}%  macro-F1: {agg_f1:.3f}")
+    print(f"\n  Aggregate per-class:")
+    print(f"  {'Class':<18} {'Prec':>6} {'Recall':>7} {'F1':>6} {'Supp':>5}")
+    print("  " + "-" * 46)
+    for i in range(NUM_CLASSES):
+        m = agg_mets[i]
+        print(f"  {CLASSES[i]:<18} {m['precision']:>6.3f} {m['recall']:>7.3f} "
+              f"{m['f1']:>6.3f} {m['support']:>5d}")
 
-    print(f"\n  Results saved to {save_dir}/")
+    with open("models/lopo_previous/lopo_results.json", "w") as f:
+        json.dump({
+            "folds": fold_results,
+            "mean_accuracy":      float(np.mean(accs)),
+            "std_accuracy":       float(np.std(accs)),
+            "mean_macro_f1":      float(np.mean(f1s)),
+            "std_macro_f1":       float(np.std(f1s)),
+            "aggregate_accuracy": float(agg_acc),
+            "aggregate_macro_f1": float(agg_f1),
+        }, f, indent=2)
+
+    print(f"\n  Results saved: models/lopo_previous/lopo_results.json")
+    print(f"  Plots saved:   models/lopo_previous/")
     print("=" * 65)
 
 

@@ -1,0 +1,13 @@
+{
+  "num_features": 12,
+  "num_classes": 7,
+  "window_size": 20,
+  "batch_size": 32,
+  "learning_rate": 0.001,
+  "weight_decay": 0.0001,
+  "epochs": 50,
+  "optimizer": "Adam",
+  "loss_function": "CrossEntropyLoss",
+  "scheduler": "StepLR (step=20, gamma=0.5)",
+  "framework": "PyTorch"
+}
