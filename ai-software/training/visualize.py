@@ -16,6 +16,7 @@ All outputs saved to models/plots/
 """
 
 import json
+import re
 import os
 import numpy as np
 import matplotlib
@@ -25,89 +26,97 @@ from sklearn.manifold import TSNE
 from sklearn.decomposition import PCA
 
 
-DATA_DIR = "data/Real_Training_Data"
+DATA_DIR = "data/Real_Training_Data/Previous"
 OUTPUT_DIR = "models/plots"
 
 SENSOR_ORDER = ["arm", "chest", "thigh"]
-FEATURES = ["ax", "ay", "az", "avm"]
-CLASSES = ["high_knees", "pushup", "situp", "lunge", "squat", "overhead_hold", "unknown"]
+FEATURES = ["avm", "ax", "ay", "az"]
+CLASSES = ["high_knees", "lunge", "squat", "overhead_arm", "push_up", "sit_up", "unknown"]
 
-FEATURE_LABELS = [f"{s}_{f}" for s in SENSOR_ORDER for f in FEATURES]
+FEATURE_LABELS = [f"{s}_{f}" for s in SENSOR_ORDER for f in FEATURES]  # 12 labels
 
-COLORS_FEAT = {"ax": "#e74c3c", "ay": "#2ecc71", "az": "#3498db", "avm": "#9b59b6"}
+COLORS_FEAT = {"avm": "#9b59b6", "ax": "#e74c3c", "ay": "#2ecc71", "az": "#3498db"}
 COLORS_CLASS = {
-    "high_knees": "#e74c3c",
-    "pushup": "#3498db",
-    "situp": "#2ecc71",
-    "lunge": "#f39c12",
-    "squat": "#9b59b6",
-    "overhead_hold": "#1abc9c",
-    "unknown": "#95a5a6",
+    "high_knees":   "#e74c3c",
+    "lunge":        "#f39c12",
+    "squat":        "#9b59b6",
+    "overhead_arm": "#3498db",
+    "push_up":      "#2ecc71",
+    "sit_up":       "#1abc9c",
+    "unknown":      "#95a5a6",
 }
 
-# Maps filename -> class for all persons
+# Maps filename -> class for all 5 people in the Previous folder
 FILENAME_TO_CLASS = {
-    "high-knee, 30s.csv": "high_knees",
-    "push-up, 30s.csv": "pushup",
-    "sit-up, 30s.csv": "situp",
-    "lunges, 30s.csv": "lunge",
-    "squats, 30s.csv": "squat",
-    "overhead_arm, 30s.csv": "overhead_hold",
-    "control-stationary, 30s.csv": "unknown",
-    "v2high-knee, 30s.csv": "high_knees",
-    "v2push-up, 30s.csv": "pushup",
-    "v2sit-up, 30s.csv": "situp",
-    "v2lunges, 30s.csv": "lunge",
-    "v2squat, 30s.csv": "squat",
-    "v2overhead_arm, 30s.csv": "overhead_hold",
-    "v3high-knee.csv": "high_knees",
-    "v3pushup.csv": "pushup",
-    "v3situp.csv": "situp",
-    "v3lunges.csv": "lunge",
-    "v3squats.csv": "squat",
-    "v3overhead_hold.csv": "overhead_hold",
-    "v3control.csv": "unknown",
-    "v4high-knee.csv": "high_knees",
-    "v4pushup.csv": "pushup",
-    "v4sit-up.csv": "situp",
-    "v4lunges.csv": "lunge",
-    "v4squats.csv": "squat",
-    "v4overhead-hold.csv": "overhead_hold",
-    "v4control.csv": "unknown",
-    # Fifth person
-    "v5highknee.csv": "high_knees",
-    "v5pushup.csv": "pushup",
-    "v5situp.csv": "situp",
-    "v5lunges.csv": "lunge",
-    "v5squat.csv": "squat",
-    "v5armhold.csv": "overhead_hold",
-    "v5control.csv": "unknown",
+    # first person
+    "high-knee, 30s.csv":            "high_knees",
+    "lunges, 30s.csv":               "lunge",
+    "squats, 30s.csv":               "squat",
+    "overhead_arm, 30s.csv":         "overhead_arm",
+    "push-up, 30s.csv":              "push_up",
+    "sit-up, 30s.csv":               "sit_up",
+    "control-stationary, 30s.csv":   "unknown",
+    # second person
+    "v2high-knee, 30s.csv":          "high_knees",
+    "v2lunges, 30s.csv":             "lunge",
+    "v2squat, 30s.csv":              "squat",
+    "v2overhead_arm, 30s.csv":       "overhead_arm",
+    "v2push-up, 30s.csv":            "push_up",
+    "v2sit-up, 30s.csv":             "sit_up",
+    # third person
+    "v3high-knee.csv":               "high_knees",
+    "v3lunges.csv":                  "lunge",
+    "v3squats.csv":                  "squat",
+    "v3overhead_hold.csv":           "overhead_arm",
+    "v3pushup.csv":                  "push_up",
+    "v3situp.csv":                   "sit_up",
+    "v3control.csv":                 "unknown",
+    # fourth person
+    "v4high-knee.csv":               "high_knees",
+    "v4lunges.csv":                  "lunge",
+    "v4squats.csv":                  "squat",
+    "v4overhead-hold.csv":           "overhead_arm",
+    "v4pushup.csv":                  "push_up",
+    "v4sit-up.csv":                  "sit_up",
+    "v4control.csv":                 "unknown",
+    # fifth person
+    "v5highknee.csv":                "high_knees",
+    "v5lunges.csv":                  "lunge",
+    "v5squat.csv":                   "squat",
+    "v5armhold.csv":                 "overhead_arm",
+    "v5pushup.csv":                  "push_up",
+    "v5situp.csv":                   "sit_up",
+    "v5control.csv":                 "unknown",
 }
 
 
 def parse_file(filepath):
-    """Parse InfluxDB CSV, return {sensor: [list of payload dicts]}."""
+    """Parse InfluxDB CSV from the Previous folder, return {sensor: [payload dicts]}."""
     sensor_data = {s: [] for s in SENSOR_ORDER}
-    with open(filepath, 'r') as f:
+    with open(filepath, encoding="utf-8", errors="ignore") as f:
         for line in f:
-            line = line.strip()
-            if not line or line.startswith("#") or ",value,esp/" not in line:
+            if '"ax"' not in line:
                 continue
             sensor = None
             for s in SENSOR_ORDER:
-                if f",value,esp/{s}," in line:
+                if f"esp/{s}" in line:
                     sensor = s
                     break
             if sensor is None:
                 continue
-            json_start = line.find('"{')
-            json_end = line.find('}"', json_start)
-            if json_start < 0 or json_end < 0:
+            js = re.search(r'"(\{.*?\})"', line)
+            if not js:
                 continue
-            raw_json = line[json_start + 1:json_end + 1].replace('""', '"')
+            raw = js.group(1).replace('""', '"')
             try:
-                sensor_data[sensor].append(json.loads(raw_json))
-            except (json.JSONDecodeError, ValueError):
+                payload = json.loads(raw)
+                sensor_data[sensor].append({
+                    "avm": float(payload["avm"]),
+                    "ax":  float(payload["ax"]),
+                    "ay":  float(payload["ay"]),
+                    "az":  float(payload["az"]),
+                })
+            except (json.JSONDecodeError, KeyError, ValueError):
                 pass
     return sensor_data
 
@@ -155,7 +164,7 @@ def plot_signals_by_class(all_data):
                         transform=ax.transAxes)
                 continue
 
-            t = np.arange(len(readings)) / 8.0
+            t = np.arange(len(readings)) / 8.0  # ~8 Hz
             for feat in FEATURES:
                 vals = [r[feat] for r in readings]
                 lw = 1.5 if feat == "avm" else 1.0
@@ -203,7 +212,7 @@ def plot_cross_person(all_data):
                     continue
                 has_data = True
 
-                t = np.arange(len(readings)) / 8.0
+                t = np.arange(len(readings)) / 8.0  # ~8 Hz
                 vals = [r["avm"] for r in readings]
                 label_str = person.replace(" person", "").strip().capitalize()
                 ax.plot(t, vals, color=person_colors[pidx], linewidth=1.2,
@@ -316,12 +325,13 @@ def plot_correlation():
             ax.text(j, i, f"{val:.2f}", ha='center', va='center',
                     fontsize=7, color=color)
 
+    # Sensor boundaries: 4 features per sensor
     for boundary in [4, 8]:
         ax.axhline(boundary - 0.5, color='black', linewidth=1.5)
         ax.axvline(boundary - 0.5, color='black', linewidth=1.5)
 
     plt.colorbar(im, ax=ax, shrink=0.8, label="Pearson Correlation")
-    ax.set_title("Feature Correlation Matrix (12 features, training data)",
+    ax.set_title("Feature Correlation Matrix (12 raw features, training data)",
                  fontsize=14, fontweight='bold', pad=15)
 
     for idx, sensor in enumerate(SENSOR_ORDER):
