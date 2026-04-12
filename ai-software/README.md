@@ -2,7 +2,7 @@
 
 This directory contains the full machine learning pipeline for real-time exercise classification using IMU wearable sensors and an FPGA-based DPU accelerator.
 
-The system classifies 7 exercises — `high_knees`, `pushup`, `situp`, `lunge`, `squat`, `overhead_hold`, `unknown` — from raw IMU data collected across 3 body-worn sensors (arm, chest, thigh), each reporting accelerometer and gyroscope readings.
+The system classifies 7 exercises — `high_knees`, `push_up`, `sit_up`, `lunge`, `squat`, `overhead_arm`, `unknown` — from raw IMU data collected across 3 body-worn sensors (arm, chest, thigh), each reporting accelerometer readings (avm, ax, ay, az).
 
 ---
 
@@ -61,11 +61,11 @@ generate_data.py                  simulate.py
 
 **File:** `model.py`
 
-Defines `ExerciseCNN`, a lightweight 1D convolutional neural network with 16,295 parameters.
+Defines `ExerciseCNN`, a lightweight 1D convolutional neural network.
 
 ```
 Input: (batch, window_size, features)
-  → Conv1D(18→32, k=9) + BatchNorm + ReLU
+  → Conv1D(12→32, k=9) + BatchNorm + ReLU
   → MaxPool1d(2)
   → Conv1D(32→64, k=5) + BatchNorm + ReLU
   → GlobalAvgPool1d               ← replaces Flatten to save BRAM on FPGA
@@ -81,7 +81,7 @@ The Conv1D layers are internally mapped to Conv2D with height=1 for DPU compatib
 ## Data Pipeline (`data_pipeline/`)
 
 ### `generate_data.py`
-Generates 1,400 synthetic training samples (200 per class) by simulating realistic IMU signals for each exercise. Each class has distinct signal characteristics — for example, `high_knees` produces 2–3 Hz rapid oscillations with strong thigh acceleration, while `overhead_hold` shows elevated wrist position with fatigue tremor.
+Generates 1,400 synthetic training samples (200 per class) by simulating realistic IMU signals for each exercise. Each class has distinct signal characteristics — for example, `high_knees` produces 2–3 Hz rapid oscillations with strong thigh acceleration, while `overhead_arm` shows elevated wrist position with fatigue tremor.
 
 Use this to test the pipeline end-to-end without real sensor hardware.
 
@@ -116,9 +116,9 @@ Runs the saved model on the held-out test set. Generates a confusion matrix, per
 **Key outputs:** `models/confusion_matrix.png`, `models/evaluation_results.json`
 
 ### `lopo_cv.py`
-Leave-One-Person-Out cross-validation. Trains 5 folds, each time holding out one person's entire data as the test set. This validates that the model generalises to unseen users, not just unseen windows from people it has seen before. Applies 4 augmentation strategies (scaling, noise injection, time warping, rotation) to expand each training fold.
+Leave-One-Person-Out cross-validation. Trains 5 folds, each time holding out one person's entire data as the test set. This validates that the model generalises to unseen users, not just unseen windows from people it has seen before. Applies augmentation strategies (scaling, noise injection) to expand each training fold.
 
-**Key outputs:** `models/lopo/lopo_results.json`, per-fold accuracy plots
+**Key outputs:** `models/lopo_previous/lopo_results.json`, per-fold accuracy plots
 
 ### `benchmark.py`
 Compares float32 CPU inference against simulated INT8 DPU inference. Reports accuracy drop (float32 → INT8), latency speedup (~6.7×), energy efficiency (~2.5× more efficient on DPU), and FPGA resource utilisation (LUT, BRAM, DSP).
@@ -196,7 +196,7 @@ Runs 6 test suites before deploying to hardware:
 
 **`check_pipeline.py`**
 
-Health check utility. Verifies that all expected output files exist, checks model parameter count (16,295 expected), and validates accuracy thresholds (>90% required). Run this anytime to identify which pipeline step is incomplete.
+Health check utility. Verifies that all expected output files exist and checks model parameter count and accuracy thresholds. Run this anytime to identify which pipeline step is incomplete.
 
 **`power_management.py`**
 
