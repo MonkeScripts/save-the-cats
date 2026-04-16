@@ -45,10 +45,7 @@
     /// or different lists for router, peer and client (e.g. endpoints: { router: ["tcp/10.10.10.10:7447"], peer: ["tcp/11.11.11.11:7447"] }).
     ///
     /// See https://docs.rs/zenoh/latest/zenoh/config/struct.EndPoint.html
-    endpoints: [
-      "tls/100.125.252.109:7447"
-
-    ],
+    endpoints: [],
 
     /// Global connect configuration,
     /// Accepts a single value or different values for router, peer and client.
@@ -95,7 +92,7 @@
     /// or different lists for router, peer and client (e.g. endpoints: { router: ["tcp/[::]:7447"], peer: ["tcp/[::]:0"] }).
     ///
     /// See https://docs.rs/zenoh/latest/zenoh/config/struct.EndPoint.html
-    // endpoints: { router: ["tcp/127.0.0.1:7448", "tcp/0.0.0.0:7447"], peer: ["tcp/[::]:7447"],  },
+    // endpoints: { router: ["tls/0.0.0.0:7447","tcp/127.0.0.1:7448","tcp/0.0.0.0:7449" ], peer: ["tcp/[::]:7449"],  },
     // endpoints: { router: ["tcp/127.0.0.1:7448", "tls/192.168.0.93:7447","tcp/0.0.0.0:7449" ], peer: ["tcp/[::]:7449"],  },
     // endpoints: { router: ["tcp/127.0.0.1:7448",  "tls/172.20.10.3:7447","tcp/0.0.0.0:7449" ], peer: ["tcp/[::]:7449"],  },
     endpoints: { router: [ "tcp/127.0.0.1:7447", "tcp/0.0.0.0:7449" , "tls/172.20.10.3:7447"], peer: ["tcp/[::]:7449"],  },
@@ -693,17 +690,17 @@
         /// Path to the certificate of the certificate authority used to validate either the server
         /// or the client's keys and certificates, depending on the node's mode. If not specified
         /// on router mode then the default WebPKI certificates are used instead.
-        root_ca_certificate: "/home/monkescripts/Documents/NUS/Y4S2/CG4002/captstone/tls/minica.pem",
+        root_ca_certificate: "/Users/timlau/minica.pem",
         /// Path to the TLS listening side private key
-        listen_private_key: "/home/monkescripts/Documents/NUS/Y4S2/CG4002/captstone/tls/127.0.0.1/key.pem",
+        listen_private_key: "/Users/timlau/laptop/key.pem",
         /// Path to the TLS listening side public certificate
-        listen_certificate: "/home/monkescripts/Documents/NUS/Y4S2/CG4002/captstone/tls/127.0.0.1/cert.pem",
+        listen_certificate: "/Users/timlau/laptop/cert.pem",
         ///  Enables mTLS (mutual authentication), client authentication
         enable_mtls: false,
         /// Path to the TLS connecting side private key
-        connect_private_key: "/home/monkescripts/Documents/NUS/Y4S2/CG4002/captstone/tls/127.0.0.1/key.pem",
+        connect_private_key: "/Users/timlau/laptop/key.pem",
         /// Path to the TLS connecting side certificate
-        connect_certificate: "/home/monkescripts/Documents/NUS/Y4S2/CG4002/captstone/tls/127.0.0.1/cert.pem",
+        connect_certificate: "/Users/timlau/laptop/cert.pem",
         /// Whether or not to verify the matching between hostname/dns and certificate when connecting,
         /// if set to false zenoh will disregard the common names of the certificates when verifying servers.
         /// This could be dangerous because your CA can have signed a server cert for foo.com, that's later being used to host a server at baz.com. If you wan't your
@@ -837,11 +834,11 @@
     storage_manager: {
       volumes: {
         influxdb2: {
-          url: "http://localhost:8086/api/v2/",
+          url: "http://127.0.0.1:8086/api/v2/",
           private: {
             // ALL-ACCESS token (or at least permission to create/delete buckets)
-            org_id: "a51e53a6b98d9c2e",
-            token: "O3hRS2dxiYU3PfsRAcLdeRMWWVdND2thwJK-x3spFWiiwTPD1MOoAQFL0cd1X4OgcMiPe0LV4HPxTxYFoT77AA==",
+            org_id: "2429ab6bc47d24d1",
+            token: "0Aar5sU9o1Kd7vgOcWArmsnUrgQz4uW9BW5sUJvJBHmr4djbhhK37KMRzgCP4RDChcHnyG1_S_tg6GH86Z0Nsg==",
           },
         },
       },
@@ -850,13 +847,13 @@
           key_expr: "esp/**",
           volume: {
             id: "influxdb2",
-            db: "monkebucket",
+            db: "hardware-imu_data",
             create_db: true,
             on_closure: "do_nothing",
             private: {
               // Read/Write token for this specific bucket (or all buckets)
-              org_id: "a51e53a6b98d9c2e",
-              token: "O3hRS2dxiYU3PfsRAcLdeRMWWVdND2thwJK-x3spFWiiwTPD1MOoAQFL0cd1X4OgcMiPe0LV4HPxTxYFoT77AA==",
+              org_id: "2429ab6bc47d24d1",
+              token: "0Aar5sU9o1Kd7vgOcWArmsnUrgQz4uW9BW5sUJvJBHmr4djbhhK37KMRzgCP4RDChcHnyG1_S_tg6GH86Z0Nsg==",
             },
           },
         },

@@ -12,51 +12,70 @@
 //   ZettaScale Zenoh Team, <zenoh@zettascale.tech>
 //
 
+#include <Arduino.h>
+#include <Wire.h>
+#include <WiFi.h>
+#include <time.h>
+#include <math.h>
+
+#include <ArduinoJson.h>
 #include <Adafruit_GFX.h>
+#include <Adafruit_Sensor.h>
 #include <Adafruit_MPU6050.h>
 #include <Adafruit_SSD1306.h>
-#include <Adafruit_Sensor.h>
-#include <Arduino.h>
-#include <ArduinoJson.h>
-#include <WiFi.h>
-#include <Wire.h>
-#include <math.h>
-#include <time.h>
 #include <zenoh-pico.h>
-
-// OLED display parameters
-#define SCREEN_WIDTH 128
-#define SCREEN_HEIGHT 64
-#define OLED_RESET -1
-Adafruit_SSD1306 display(SCREEN_WIDTH, SCREEN_HEIGHT, &Wire, OLED_RESET);
-Adafruit_MPU6050 mpu;
-static uint32_t last_oled_ms = 0;
-static const uint32_t OLED_PERIOD_MS = 200;  // 5 Hz
-static bool oled_ok = false;
-
-//IMU parameters
-static const uint32_t SAMPLE_DELAY_MS = 100;  // 10 Hz
-static const int FS_HZ = 10;
 
 #include "secrets.h"
 
-#if Z_FEATURE_PUBLICATION == 1 and Z_FEATURE_LINK_TLS == 1
+// =====================================================
+// OLED display parameters
+// =====================================================
+#define SCREEN_WIDTH 128
+#define SCREEN_HEIGHT 64
+#define OLED_RESET   -1
 
-// Client mode values (comment/uncomment as needed)
+// =====================================================
+// IMU / sampling parameters
+// =====================================================
+static const uint32_t SAMPLE_DELAY_MS = 110;   // 10 Hz sampling
+static const int FS_HZ = 50;
+static const uint32_t OLED_PERIOD_MS = 500;    // 2 Hz OLED refresh
+static uint32_t last_oled_ms = 0;
+static bool oled_ok = false;
+
+// WiFi Reconnection
+static uint32_t last_wifi_retry_ms = 0;
+static const uint32_t WIFI_RETRY_INTERVAL_MS = 3000;  // retry every 3s
+static bool wifi_was_connected = false;
+
+// =====================================================
+// Zenoh configuration
+// =====================================================
+#if Z_FEATURE_PUBLICATION == 1 && Z_FEATURE_LINK_TLS == 1
+
+// Client mode values
 #define MODE "client"
-#define LOCATOR "tls/172.20.10.9:7447"
-// #define LOCATOR "tls/192.168.0.93:7447"  // If empty, it will scout
-//  Peer mode values (comment/uncomment as needed)
-//  #define MODE "peer"
-//  #define LOCATOR "udp/224.0.0.225:7447#iface=en0"
+#define LOCATOR "tls/172.20.10.3:7447" //shaoliang
+// #define LOCATOR "tls/172.20.10.9:7447" //TimL
+// #define LOCATOR "tls/192.168.0.93:7447"   // alternative locator
+// Peer mode values
+// #define MODE "peer"
+// #define LOCATOR "udp/224.0.0.225:7447#iface=en0"
 
-#define KEYEXPRPUB "esp/arm"
+#define KEYEXPRPUB "esp/chest"
 #define KEYEXPRSUB "computer/**"
 #define VALUE "[ARDUINO]{ESP32} Publication from Zenoh-Pico!"
 
+// =====================================================
+// Global objects
+// =====================================================
 z_owned_session_t s;
 z_owned_publisher_t pub;
 z_owned_subscriber_t sub;
+
+Adafruit_SSD1306 display(SCREEN_WIDTH, SCREEN_HEIGHT, &Wire, OLED_RESET);
+Adafruit_MPU6050 mpu;
+
 static int idx = 0;
 static int action = 0;
 
@@ -122,6 +141,79 @@ void oledStatus(const char* line1, const char* line2) {
     display.display();
 }
 
+void connectWiFiBlocking() {
+    WiFi.mode(WIFI_STA);
+    WiFi.begin(WIFI_SSID, WIFI_PASS);
+
+    Serial.println("SSID: " + String(WIFI_SSID));
+    Serial.print("Connecting to WiFi");
+
+    oledStatus("IMU WORKOUT SYS", "Waiting for WiFi");
+
+    uint32_t last_anim = 0;
+    int dots = 0;
+
+    while (WiFi.status() != WL_CONNECTED) {
+        uint32_t now = millis();
+
+        if (now - last_anim > 500) {
+            last_anim = now;
+            dots = (dots + 1) % 4;
+
+            char msg[22];
+            snprintf(msg, sizeof(msg), "Waiting WiFi%s",
+                     dots == 0 ? "" :
+                     dots == 1 ? "." :
+                     dots == 2 ? ".." : "...");
+
+            oledStatus("IMU WORKOUT SYS", msg);
+            Serial.print(".");
+        }
+
+        delay(200);
+    }
+
+    Serial.println();
+    Serial.print("WiFi connected. IP: ");
+    Serial.println(WiFi.localIP());
+
+    oledStatus("IMU WORKOUT SYS", "WiFi connected");
+    delay(1000);
+
+    wifi_was_connected = true;
+}
+
+void maintainWiFi() {
+    wl_status_t status = WiFi.status();
+
+    if (status == WL_CONNECTED) {
+        if (!wifi_was_connected) {
+            Serial.print("WiFi reconnected. IP: ");
+            Serial.println(WiFi.localIP());
+            oledStatus("IMU WORKOUT SYS", "WiFi reconnected");
+            wifi_was_connected = true;
+        }
+        return;
+    }
+
+    if (wifi_was_connected) {
+        Serial.println("WiFi lost. Attempting reconnect...");
+        oledStatus("IMU WORKOUT SYS", "WiFi lost");
+        wifi_was_connected = false;
+    }
+
+    uint32_t now = millis();
+    if (now - last_wifi_retry_ms >= WIFI_RETRY_INTERVAL_MS) {
+        last_wifi_retry_ms = now;
+
+        Serial.println("Retrying WiFi...");
+        oledStatus("IMU WORKOUT SYS", "Reconnecting WiFi");
+
+        WiFi.disconnect();
+        WiFi.begin(WIFI_SSID, WIFI_PASS);
+    }
+}
+
 void setup() {
     // Initialize Serial for debug
     Serial.begin(115200);
@@ -146,40 +238,8 @@ void setup() {
         delay(500);
     }
 
-    // Set WiFi in STA mode and trigger attachment
-    WiFi.mode(WIFI_STA);
-    WiFi.begin(WIFI_SSID, WIFI_PASS);
-    Serial.println("SSID: " + String(WIFI_SSID));
-    Serial.printf("Password: %s\n", WIFI_PASS);
-
-    Serial.print("Connecting to WiFi: ...");
-    oledStatus("IMU WORKOUT SYS", "Waiting for WiFi");
-    uint32_t last_anim = 0;
-    int dots = 0;
-    // Serial.printf("ROOT CA %s\n", my_root_ca);
-    while (WiFi.status() != WL_CONNECTED) {
-        Serial.println("Attempting to connect to WiFi...");
-        // OLED dots animation every 500 ms
-        uint32_t now = millis();
-        if (now - last_anim > 500) {
-            last_anim = now;
-            dots = (dots + 1) % 4;
-            char msg[22];
-            snprintf(msg, sizeof(msg), "Waiting WiFi%s",
-                     dots == 0 ? "" : dots == 1 ? "."
-                                  : dots == 2   ? ".."
-                                                : "...");
-            oledStatus("IMU WORKOUT SYS", msg);
-        }
-        delay(1000);
-    }
-
-    Serial.println(WiFi.localIP());
-    Serial.println("OK");
-
-    // Show connected screen for 2 seconds
-    oledStatus("IMU WORKOUT SYS", "WiFi connected");
-    delay(2000);
+    // ==== WiFi Connection ===
+    connectWiFiBlocking();
 
     syncTime();
 
@@ -299,8 +359,13 @@ void setup() {
 }
 
 void loop() {
-    delay(SAMPLE_DELAY_MS);  // 10 Hz sampling
+    delay(SAMPLE_DELAY_MS);  // adjusting frequency sampling
+    maintainWiFi();
 
+    if (WiFi.status() != WL_CONNECTED) {
+        delay(50);   // small pause while reconnecting
+        return;      // do not sample/publish until WiFi is back
+    }
     sensors_event_t a, g, temp;
     mpu.getEvent(&a, &g, &temp);
 
@@ -310,14 +375,22 @@ void loop() {
     float avm = sqrtf(ax * ax + ay * ay + az * az);
     uint32_t now_ms = millis();
 
+    // Gyroscope data
+    float gx = g.gyro.x;
+    float gy = g.gyro.y;
+    float gz = g.gyro.z;
+
     //Create JSON payload
-    StaticJsonDocument<256> doc;
-    doc["fs_hz"] = FS_HZ;
+    StaticJsonDocument<128> doc;
+    //doc["fs_hz"] = FS_HZ;
     doc["t_ms"] = now_ms;
     doc["ax"] = ax;
     doc["ay"] = ay;
     doc["az"] = az;
     doc["avm"] = avm;
+    doc["gx"] = gx;
+    doc["gy"] = gy;
+    doc["gz"] = gz;
 
     char json_buf[256];
     size_t n = serializeJson(doc, json_buf, sizeof(json_buf));
@@ -327,39 +400,10 @@ void loop() {
     }
 
     //Serial output
-    Serial.printf("Publishing sample: t=%lu ax=%.2f ay=%.2f az=%.2f avm=%.2f\n",
-                  (unsigned long)now_ms, ax, ay, az, avm);
-
-    // ===== OLED update at 5 Hz (unchanged) =====
-    if (now_ms - last_oled_ms > OLED_PERIOD_MS) {
-        last_oled_ms = now_ms;
-
-        display.clearDisplay();
-        display.setCursor(0, 0);
-
-        display.println("IMU WORKOUT SYS");
-
-        // Line 2: FS + Window length
-        display.print("FS:");
-        display.print(FS_HZ);
-        display.println("Hz");
-
-        display.print("Streaming");
-        display.println(" live data");
-
-        // Live values
-        display.print("AVM:");
-        display.println(avm, 2);
-        display.print("ax: ");
-        display.println(ax, 2);
-        display.print("ay: ");
-        display.println(ay, 2);
-        display.print("az: ");
-        display.println(az, 2);
-
-        display.display();
-    }
-
+    // Serial.printf(
+    //     "t=%lu ax=%.2f ay=%.2f az=%.2f avm=%.2f gx=%.2f gy=%.2f gz=%.2f\n",
+    //     (unsigned long)now_ms, ax, ay, az, avm, gx, gy, gz
+    // );
 
     // ===== Zenoh publish (same as before) =====
     z_owned_bytes_t payload;
@@ -374,6 +418,12 @@ void loop() {
 
     if (z_publisher_put(z_publisher_loan(&pub), z_bytes_move(&payload), &options) < 0) {
         Serial.println("Error while publishing sample data");
+    }
+    delay(1);
+    if (millis() - last_oled_ms > OLED_PERIOD_MS) {
+        last_oled_ms = millis();
+
+        oledStatus("IMU WORKOUT SYS", "Streaming Data");
     }
 }
 #else
