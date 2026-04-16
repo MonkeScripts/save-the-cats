@@ -1,0 +1,37 @@
+{
+  "param":
+  {
+    "ExerciseCNN::conv1.weight":[[8,10]],
+    "ExerciseCNN::conv1.bias":[[8,12]],
+    "ExerciseCNN::bn1.weight":[[8,7]],
+    "ExerciseCNN::bn1.bias":[[8,9]],
+    "ExerciseCNN::conv2.weight":[[8,9]],
+    "ExerciseCNN::conv2.bias":[[8,12]],
+    "ExerciseCNN::bn2.weight":[[8,5]],
+    "ExerciseCNN::bn2.bias":[[8,6]],
+    "ExerciseCNN::fc1.weight":[[8,9]],
+    "ExerciseCNN::fc1.bias":[[8,9]],
+    "ExerciseCNN::fc2.weight":[[8,8]],
+    "ExerciseCNN::fc2.bias":[[8,9]]
+  },
+  "output":
+  {
+    "ExerciseCNN::nndct_input_0":[[8,5]],
+    "ExerciseCNN::nndct_conv1d_2":[[8,4]],
+    "ExerciseCNN::nndct_relu_4":[[8,5]],
+    "ExerciseCNN::nndct_maxpool1d_5":[[8,6]],
+    "ExerciseCNN::nndct_conv1d_6":[[8,6]],
+    "ExerciseCNN::nndct_relu_8":[[8,5]],
+    "ExerciseCNN::nndct_relu_12":[[8,5]],
+    "ExerciseCNN::nndct_dense_13":[[8,5]],
+    "ExerciseCNN::aten_adaptive_avg_pool1d_9":[[8,5]]
+  },
+  "input":
+  {
+
+  },
+  "fast_finetuned":false,
+  "bias_corrected":true,
+  "version":"3.5.0+60df3f1+torch1.13.1",
+  "graph_md5":"05d6368375694a4e746591b38e7b7fc4"
+}

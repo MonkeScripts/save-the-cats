@@ -5,6 +5,9 @@ A gamified AR gym experience to motivate fitness enthusiasts to achieve their wo
 
 Project uses ESP32/FireBeetle microcontroller boards for tracking user movements and interactions within the gym environment.
 
+## Communication architecture
+![archi](save_the_cats_communications.png)
+
 ## Setting up PIO Environment
 1. Install PlatformIO IDE extension in VSCode.
 2. Open this project folder through PIO Home in VSCode.

@@ -1,0 +1,96 @@
+{
+  "accuracy": {
+    "float32_accuracy": 1.0,
+    "int8_accuracy": 1.0,
+    "accuracy_drop": 0.0,
+    "per_class": {
+      "high_knees": {
+        "float32": 1.0,
+        "int8": 1.0
+      },
+      "pushup": {
+        "float32": 1.0,
+        "int8": 1.0
+      },
+      "situp": {
+        "float32": 1.0,
+        "int8": 1.0
+      },
+      "lunge": {
+        "float32": 1.0,
+        "int8": 1.0
+      },
+      "squat": {
+        "float32": 1.0,
+        "int8": 1.0
+      },
+      "overhead_hold": {
+        "float32": 1.0,
+        "int8": 1.0
+      }
+    },
+    "total_samples": 300,
+    "mismatches": 0
+  },
+  "cpu_latency": {
+    "cpu_mean_ms": 0.2861964702606201,
+    "cpu_std_ms": 0.05690311257443876,
+    "cpu_min_ms": 0.2040863037109375,
+    "cpu_max_ms": 0.7770061492919922,
+    "cpu_p50_ms": 0.27680397033691406,
+    "cpu_p95_ms": 0.36207437515258784,
+    "cpu_p99_ms": 0.38627147674560414,
+    "cpu_batch_total_ms": 88.23442459106445,
+    "cpu_throughput_per_sec": 3400.03350608784,
+    "num_runs": 200
+  },
+  "dpu_performance": {
+    "total_macs": 1329344,
+    "dpu_clock_mhz": 300,
+    "dpu_ops_per_cycle": 2304,
+    "dpu_peak_gops": 691.2,
+    "dpu_est_latency_ms": 0.15,
+    "dpu_est_throughput_per_sec": 6666.666666666667,
+    "dpu_power_w": 2.5,
+    "cpu_power_w": 1.5,
+    "dpu_energy_per_inference_mj": 0.375,
+    "cpu_energy_per_inference_mj": 1.5,
+    "energy_ratio": 4.0
+  },
+  "resource_utilization": {
+    "LUT": {
+      "used": 45859,
+      "total": 70560,
+      "percent": 65.0
+    },
+    "FF": {
+      "used": 71324,
+      "total": 141120,
+      "percent": 50.5
+    },
+    "BRAM": {
+      "used": 162,
+      "total": 216,
+      "percent": 75.0
+    },
+    "DSP": {
+      "used": 306,
+      "total": 360,
+      "percent": 85.0
+    },
+    "URAM": {
+      "used": 0,
+      "total": 0,
+      "percent": 0
+    }
+  },
+  "speedup": 1.9079764684041343,
+  "optimizations": [
+    "INT8 Quantization",
+    "BatchNorm Fusion",
+    "GlobalAvgPool (instead of Flatten)",
+    "ArgMax (instead of Softmax)",
+    "ReLU Activation",
+    "Conv1D \u2192 Conv2D Mapping"
+  ]
+}

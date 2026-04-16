@@ -1,0 +1,18 @@
+torch>=2.10.0
+numpy>=1.26.4
+matplotlib>=3.10.8
+seaborn>=0.13.2
+tabulate>=0.10.0
+scikit-learn>=1.8.0
+
+# Required for data collection and runtime on Ultra96
+# Install separately: pip install zenoh
+# zenoh>=1.0.0
+
+# Required for quantization (inside Vitis AI Docker only)
+# vai_q_pytorch
+# vai_q_onnx
+
+# Required for DPU runtime on Ultra96 (pre-installed on PYNQ image)
+# vart
+# pynq

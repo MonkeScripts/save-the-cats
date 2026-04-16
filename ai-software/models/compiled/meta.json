@@ -1,0 +1,9 @@
+{
+    "lib": "libvart-dpu-runner.so",
+    "filename": "exercise_cnn.xmodel",
+    "kernel": [
+        "subgraph_ExerciseCNN__ExerciseCNN_Linear_fc1__ret_23(TransferMatMulToConv2d)",
+        "subgraph_ExerciseCNN__ExerciseCNN_BatchNorm1d_bn1__ret_7_transfer_to_depthwise_conv2d"
+    ],
+    "target": "DPUCZDX8G_ISA1_B1600_0101000016010404"
+}

@@ -1,0 +1,260 @@
+{
+  "folds": [
+    {
+      "fold": 1,
+      "test_person": "fifth person",
+      "accuracy": 0.6837060702875399,
+      "macro_f1": 0.6335607997628904,
+      "per_class": {
+        "high_knees": {
+          "precision": 0.5277777777777778,
+          "recall": 0.8444444444444444,
+          "f1": 0.6495726495726496,
+          "support": 45
+        },
+        "lunge": {
+          "precision": 1.0,
+          "recall": 0.22727272727272727,
+          "f1": 0.37037037037037035,
+          "support": 44
+        },
+        "squat": {
+          "precision": 0.4270833333333333,
+          "recall": 0.9318181818181818,
+          "f1": 0.5857142857142857,
+          "support": 44
+        },
+        "overhead_arm": {
+          "precision": 1.0,
+          "recall": 1.0,
+          "f1": 1.0,
+          "support": 46
+        },
+        "push_up": {
+          "precision": 0.918918918918919,
+          "recall": 0.7555555555555555,
+          "f1": 0.8292682926829269,
+          "support": 45
+        },
+        "sit_up": {
+          "precision": 1.0,
+          "recall": 1.0,
+          "f1": 1.0,
+          "support": 45
+        },
+        "unknown": {
+          "precision": 0.0,
+          "recall": 0.0,
+          "f1": 0.0,
+          "support": 44
+        }
+      }
+    },
+    {
+      "fold": 2,
+      "test_person": "first person",
+      "accuracy": 0.3,
+      "macro_f1": 0.29453489011874234,
+      "per_class": {
+        "high_knees": {
+          "precision": 0.0,
+          "recall": 0.0,
+          "f1": 0.0,
+          "support": 44
+        },
+        "lunge": {
+          "precision": 0.043478260869565216,
+          "recall": 0.06818181818181818,
+          "f1": 0.05309734513274336,
+          "support": 44
+        },
+        "squat": {
+          "precision": 0.14814814814814814,
+          "recall": 0.45454545454545453,
+          "f1": 0.22346368715083798,
+          "support": 44
+        },
+        "overhead_arm": {
+          "precision": 1.0,
+          "recall": 0.8444444444444444,
+          "f1": 0.9156626506024096,
+          "support": 45
+        },
+        "push_up": {
+          "precision": 0.08333333333333333,
+          "recall": 0.06818181818181818,
+          "f1": 0.075,
+          "support": 44
+        },
+        "sit_up": {
+          "precision": 1.0,
+          "recall": 0.6590909090909091,
+          "f1": 0.7945205479452054,
+          "support": 44
+        },
+        "unknown": {
+          "precision": 0.0,
+          "recall": 0.0,
+          "f1": 0.0,
+          "support": 45
+        }
+      }
+    },
+    {
+      "fold": 3,
+      "test_person": "fourth person",
+      "accuracy": 0.581081081081081,
+      "macro_f1": 0.4965800678035138,
+      "per_class": {
+        "high_knees": {
+          "precision": 0.29577464788732394,
+          "recall": 0.9545454545454546,
+          "f1": 0.45161290322580644,
+          "support": 44
+        },
+        "lunge": {
+          "precision": 0.0,
+          "recall": 0.0,
+          "f1": 0.0,
+          "support": 45
+        },
+        "squat": {
+          "precision": 0.0,
+          "recall": 0.0,
+          "f1": 0.0,
+          "support": 29
+        },
+        "overhead_arm": {
+          "precision": 0.9565217391304348,
+          "recall": 1.0,
+          "f1": 0.9777777777777777,
+          "support": 44
+        },
+        "push_up": {
+          "precision": 0.8076923076923077,
+          "recall": 0.9545454545454546,
+          "f1": 0.875,
+          "support": 44
+        },
+        "sit_up": {
+          "precision": 1.0,
+          "recall": 0.8222222222222222,
+          "f1": 0.9024390243902439,
+          "support": 45
+        },
+        "unknown": {
+          "precision": 1.0,
+          "recall": 0.15555555555555556,
+          "f1": 0.2692307692307693,
+          "support": 45
+        }
+      }
+    },
+    {
+      "fold": 4,
+      "test_person": "second person",
+      "accuracy": 0.6119402985074627,
+      "macro_f1": 0.5390037593984962,
+      "per_class": {
+        "high_knees": {
+          "precision": 0.9473684210526315,
+          "recall": 0.4,
+          "f1": 0.5625,
+          "support": 45
+        },
+        "lunge": {
+          "precision": 0.17391304347826086,
+          "recall": 0.26666666666666666,
+          "f1": 0.2105263157894737,
+          "support": 45
+        },
+        "squat": {
+          "precision": 0.0,
+          "recall": 0.0,
+          "f1": 0.0,
+          "support": 44
+        },
+        "overhead_arm": {
+          "precision": 1.0,
+          "recall": 1.0,
+          "f1": 1.0,
+          "support": 45
+        },
+        "push_up": {
+          "precision": 1.0,
+          "recall": 1.0,
+          "f1": 1.0,
+          "support": 44
+        },
+        "sit_up": {
+          "precision": 1.0,
+          "recall": 1.0,
+          "f1": 1.0,
+          "support": 45
+        },
+        "unknown": {
+          "precision": 0.0,
+          "recall": 0.0,
+          "f1": 0.0,
+          "support": 0
+        }
+      }
+    },
+    {
+      "fold": 5,
+      "test_person": "third person",
+      "accuracy": 0.6506410256410257,
+      "macro_f1": 0.6062092132948189,
+      "per_class": {
+        "high_knees": {
+          "precision": 0.65,
+          "recall": 0.8666666666666667,
+          "f1": 0.7428571428571429,
+          "support": 45
+        },
+        "lunge": {
+          "precision": 0.56,
+          "recall": 0.6363636363636364,
+          "f1": 0.5957446808510639,
+          "support": 44
+        },
+        "squat": {
+          "precision": 0.0,
+          "recall": 0.0,
+          "f1": 0.0,
+          "support": 44
+        },
+        "overhead_arm": {
+          "precision": 0.676923076923077,
+          "recall": 1.0,
+          "f1": 0.8073394495412844,
+          "support": 44
+        },
+        "push_up": {
+          "precision": 1.0,
+          "recall": 0.5111111111111111,
+          "f1": 0.676470588235294,
+          "support": 45
+        },
+        "sit_up": {
+          "precision": 1.0,
+          "recall": 1.0,
+          "f1": 1.0,
+          "support": 45
+        },
+        "unknown": {
+          "precision": 0.34782608695652173,
+          "recall": 0.5333333333333333,
+          "f1": 0.4210526315789474,
+          "support": 45
+        }
+      }
+    }
+  ],
+  "mean_accuracy": 0.5654736951034218,
+  "std_accuracy": 0.1371943054601088,
+  "mean_macro_f1": 0.5139777460756922,
+  "std_macro_f1": 0.11990904707918099,
+  "aggregate_accuracy": 0.5643762508338893,
+  "aggregate_macro_f1": 0.5488236867533415
+}

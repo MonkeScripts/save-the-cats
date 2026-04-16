@@ -1,0 +1,76 @@
+{
+  "power_states": {
+    "idle": {
+      "total_power_w": 0.958,
+      "description": "System idle, no inference"
+    },
+    "cpu_only": {
+      "total_power_w": 1.209,
+      "description": "CPU inference (PyTorch, no DPU)"
+    },
+    "dpu_inference": {
+      "total_power_w": 1.933,
+      "description": "DPU inference active"
+    },
+    "dpu_idle": {
+      "total_power_w": 1.304,
+      "description": "DPU loaded but idle (between inferences)"
+    },
+    "low_power": {
+      "total_power_w": 0.794,
+      "description": "Optimized: CPU scaled down + PL clock gated"
+    }
+  },
+  "dvfs_frequencies": [
+    {
+      "freq_mhz": 300,
+      "voltage_v": 0.72,
+      "rel_power": 0.25,
+      "rel_performance": 0.25,
+      "use_case": "Deep sleep / minimal processing"
+    },
+    {
+      "freq_mhz": 600,
+      "voltage_v": 0.78,
+      "rel_power": 0.45,
+      "rel_performance": 0.5,
+      "use_case": "Between inferences (idle waiting)"
+    },
+    {
+      "freq_mhz": 1200,
+      "voltage_v": 0.85,
+      "rel_power": 1.0,
+      "rel_performance": 1.0,
+      "use_case": "Active processing / data preparation"
+    }
+  ],
+  "clock_gating_strategies": [
+    {
+      "name": "Always-on DPU",
+      "pl_clock": "300 MHz continuous",
+      "power_impact": "Highest PL power even when idle",
+      "latency_impact": "Zero DPU wake-up time",
+      "suitable_for": "High-frequency inference (>10 Hz)"
+    },
+    {
+      "name": "Clock scaling",
+      "pl_clock": "150 MHz between inferences, 300 MHz during",
+      "power_impact": "~40% PL power reduction during idle",
+      "latency_impact": "~1ms to switch clock frequency",
+      "suitable_for": "Medium-frequency inference (2-10 Hz)"
+    },
+    {
+      "name": "Full clock gating",
+      "pl_clock": "0 MHz between inferences, 300 MHz during",
+      "power_impact": "~80% PL power reduction during idle",
+      "latency_impact": "~5-10ms to re-enable PL clock",
+      "suitable_for": "Low-frequency inference (<2 Hz)"
+    }
+  ],
+  "wearable_node": {
+    "total_avg_current_ma": 99.5204,
+    "battery_capacity_mah": 500,
+    "estimated_runtime_hours": 4.270481227969341,
+    "meets_3hr_target": true
+  }
+}
