@@ -2,6 +2,8 @@
 A gamified AR gym experience to motivate fitness enthusiasts to achieve their workout goals by saving virtual cats.
 <img width="686" height="386" alt="image" src="https://github.com/user-attachments/assets/ffda538e-302c-4de9-8c08-4c2f97c4b2ab" />
 
+See https://github.com/MonkeScripts/save-the-cats-unity for the actual unity game!
+
 
 Project uses ESP32/FireBeetle microcontroller boards for tracking user movements and interactions within the gym environment.
 
