@@ -89,3 +89,6 @@ If you prefer not to uninstall the package, disable the service and its udev rul
 
 ### Verification
 To verify the fix, run dmesg -w and plug in the board. You should see the device being assigned to `/dev/ttyUSB*` without any disconnection messages from brltty.
+
+## Demo Video
+[Watch the demo on YouTube](https://youtu.be/_d-WRYlDYAs)
